@@ -266,14 +266,16 @@ test('nginx.conf: NGINX_CSP_* with an empty value is a no-op', async () => {
 });
 
 test('nginx.conf: every supported NGINX_CSP_* set to empty leaves the config unchanged', async () => {
-    const { stdout: baseline } = await exec(process.execPath, [SCRIPT], {
-        env: { ...process.env, API_URL: 'https://map.example.com' },
-    });
+    const env: Record<string, string | undefined> = { ...process.env, API_URL: 'https://map.example.com' };
+    for (const name of Object.keys(env)) {
+        if (name.startsWith('NGINX_CSP_')) delete env[name];
+    }
+
+    const { stdout: baseline } = await exec(process.execPath, [SCRIPT], { env });
 
     const { stdout } = await exec(process.execPath, [SCRIPT], {
         env: {
-            ...process.env,
-            API_URL: 'https://map.example.com',
+            ...env,
             NGINX_CSP_DEFAULT_SRC: '',
             NGINX_CSP_IMG_SRC: '',
             NGINX_CSP_MEDIA_SRC: '',
