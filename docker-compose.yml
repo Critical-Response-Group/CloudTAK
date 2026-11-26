@@ -26,6 +26,14 @@ services:
             - POSTGRES=${POSTGRES}
             - API_URL=${API_URL}
             - PMTILES_URL=${PMTILES_URL}
+            - NGINX_CSP_DEFAULT_SRC=${NGINX_CSP_DEFAULT_SRC:-}
+            - NGINX_CSP_IMG_SRC=${NGINX_CSP_IMG_SRC:-}
+            - NGINX_CSP_MEDIA_SRC=${NGINX_CSP_MEDIA_SRC:-}
+            - NGINX_CSP_FONT_SRC=${NGINX_CSP_FONT_SRC:-}
+            - NGINX_CSP_WORKER_SRC=${NGINX_CSP_WORKER_SRC:-}
+            - NGINX_CSP_STYLE_SRC_ELEM=${NGINX_CSP_STYLE_SRC_ELEM:-}
+            - NGINX_CSP_STYLE_SRC_ATTR=${NGINX_CSP_STYLE_SRC_ATTR:-}
+            - NGINX_CSP_CONNECT_SRC=${NGINX_CSP_CONNECT_SRC:-}
 
     tiles:
         build:

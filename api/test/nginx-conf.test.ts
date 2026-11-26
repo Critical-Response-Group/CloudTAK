@@ -265,6 +265,29 @@ test('nginx.conf: NGINX_CSP_* with an empty value is a no-op', async () => {
     assert.ok(csp[0].includes(`img-src 'self' data: blob: map.example.com:* *.example.com:*;`));
 });
 
+test('nginx.conf: every supported NGINX_CSP_* set to empty leaves the config unchanged', async () => {
+    const { stdout: baseline } = await exec(process.execPath, [SCRIPT], {
+        env: { ...process.env, API_URL: 'https://map.example.com' },
+    });
+
+    const { stdout } = await exec(process.execPath, [SCRIPT], {
+        env: {
+            ...process.env,
+            API_URL: 'https://map.example.com',
+            NGINX_CSP_DEFAULT_SRC: '',
+            NGINX_CSP_IMG_SRC: '',
+            NGINX_CSP_MEDIA_SRC: '',
+            NGINX_CSP_FONT_SRC: '',
+            NGINX_CSP_WORKER_SRC: '',
+            NGINX_CSP_STYLE_SRC_ELEM: '',
+            NGINX_CSP_STYLE_SRC_ATTR: '',
+            NGINX_CSP_CONNECT_SRC: '',
+        },
+    });
+
+    assert.equal(stdout, baseline);
+});
+
 test('nginx.conf: unknown NGINX_CSP_* variable is a startup error', async () => {
     await assert.rejects(exec(process.execPath, [SCRIPT], {
         env: {
