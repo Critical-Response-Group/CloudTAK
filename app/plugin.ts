@@ -31,8 +31,9 @@ export { FeatureHistorySource };
 
 /**
  * Menu panel used by CloudTAK's core menus: a header with `name` and `subtitle` (or a `header`
- * slot), a back button when there is a previous page, and a `buttons` slot; a scrolling body;
- * and a `footer` slot. On mobile it opens as a modal with a close button unless `standalone` is false
+ * slot), a back button unless `back` is false or the previous page is the map (`/`), and a
+ * `buttons` slot; a body that scrolls unless `scroll` is false; and a `footer` slot. On mobile
+ * it opens as a modal with a close button unless `standalone` is false
  */
 export const MenuTemplate = MenuTemplateComponent;
 
