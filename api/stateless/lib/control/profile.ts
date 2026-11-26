@@ -1,4 +1,6 @@
 import { Static, Type } from '@sinclair/typebox';
+import Err from '@openaddresses/batch-error';
+import { sql, eq, and } from 'drizzle-orm';
 import { TAKRole, TAKGroup } from '@tak-ps/node-tak/lib/api/types';
 import type ConfigStateless from '../../config.js';
 import {
@@ -6,6 +8,7 @@ import {
 } from '../../../common/enums.js';
 import { ProfileResponse } from '../../../common/types.js';
 import ProfileOverlayControl from '../../../common/control/profile-overlay.js';
+import { ProfileSetting } from '../../../common/schema.js';
 
 export const ProfileConfigDefaults = {
     'display::stale': Profile_Stale.TenMinutes,
@@ -140,6 +143,37 @@ export default class ProfileControl {
         token?: string;
     }> {
         return await new ProfileOverlayControl(this.config).subscription(username, guid);
+    }
+
+    /**
+     * Merge plugin settings into a user's profile, an empty string removes a key -
+     * an advisory lock serialises concurrent writes for the user so none is lost
+     */
+    async mergePluginSettings(username: string, settings: Record<string, string>): Promise<void> {
+        await this.config.pg.transaction(async (tx) => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`plugin::settings:${username}`}::text))`);
+
+            const [current] = await tx.select({ value: ProfileSetting.value })
+                .from(ProfileSetting)
+                .where(and(eq(ProfileSetting.username, username), eq(ProfileSetting.key, 'plugin::settings')));
+
+            const merged = Object.fromEntries(Object.entries({
+                ...(current ? JSON.parse(current.value) as Record<string, string> : {}),
+                ...settings,
+            }).filter(([, value]) => value !== ''));
+
+            if (Object.keys(merged).length > 100) {
+                throw new Err(400, null, 'A profile holds at most 100 plugin settings');
+            }
+
+            const value = JSON.stringify(merged);
+            await tx.insert(ProfileSetting)
+                .values({ username, key: 'plugin::settings', value })
+                .onConflictDoUpdate({
+                    target: [ProfileSetting.username, ProfileSetting.key],
+                    set: { value, updated: sql`Now()` },
+                });
+        });
     }
 
     async from(email: string): Promise<Static<typeof ProfileResponse>> {

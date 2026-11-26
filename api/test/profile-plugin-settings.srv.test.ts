@@ -51,6 +51,38 @@ test('PATCH: api/profile - plugin_settings merges keys and an empty string remov
     }
 });
 
+test('PATCH: api/profile - concurrent plugin_settings writes from two sessions keep every key', async () => {
+    try {
+        const other = await flight.fetch('/api/login', {
+            method: 'POST',
+            body: { username: 'user@example.com', password: 'password123' },
+        }, true);
+
+        const keys = Array.from({ length: 10 }, (_, i) => `concurrent-${i}`);
+
+        await Promise.all(keys.map((key, i) => flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: i % 2 ? other.body.token : token },
+            body: { plugin_settings: { [key]: 'value' } },
+        }, true)));
+
+        const res = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: token },
+        }, true);
+
+        assert.deepEqual(Object.keys(res.body.plugin_settings).sort(), ['crg-map-layers', ...keys].sort());
+
+        await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: token },
+            body: { plugin_settings: Object.fromEntries(keys.map((key) => [key, ''])) },
+        }, true);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
 test('PATCH: api/profile - plugin_settings rejects an invalid plugin key', async () => {
     try {
         const res = await flight.fetch('/api/profile', {

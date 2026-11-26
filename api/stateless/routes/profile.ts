@@ -40,23 +40,15 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             const user = await Auth.as_user(config, req);
 
             const profileBody = req.body as ProfilePatchBodyType;
-            const profile_config: Record<string, ProfilePatchValue> = {};
-            for (const key of Object.keys(profileBody) as Array<keyof ProfilePatchBodyType>) {
-                profile_config[String(key).replace('_', '::')] = profileBody[key];
-            }
 
             if (profileBody.plugin_settings) {
-                const current = await config.models.ProfileConfig.from(user.email);
-                const plugin_settings = Object.fromEntries(Object.entries({
-                    ...current['plugin::settings'] as Record<string, string> | undefined,
-                    ...profileBody.plugin_settings,
-                }).filter(([, value]) => value !== ''));
+                await profileControl.mergePluginSettings(user.email, profileBody.plugin_settings);
+            }
 
-                if (Object.keys(plugin_settings).length > 100) {
-                    throw new Err(400, null, 'A profile holds at most 100 plugin settings');
-                }
-
-                profile_config['plugin::settings'] = plugin_settings;
+            const profile_config: Record<string, ProfilePatchValue> = {};
+            for (const key of Object.keys(profileBody) as Array<keyof ProfilePatchBodyType>) {
+                if (key === 'plugin_settings') continue;
+                profile_config[String(key).replace('_', '::')] = profileBody[key];
             }
 
             await config.models.ProfileConfig.commit(user.email, profile_config);
