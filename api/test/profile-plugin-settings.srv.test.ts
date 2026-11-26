@@ -126,7 +126,7 @@ test('ProfileConfig.commit - writes naming plugin::settings and another key in o
     } finally {
         holder.release();
         await sql.end();
-        await pool.end();
+        pool.end();
     }
 });
 
