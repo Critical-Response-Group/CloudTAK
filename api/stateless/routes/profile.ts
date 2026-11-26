@@ -4,7 +4,6 @@ import Err from '@openaddresses/batch-error';
 import Auth from '../../common/auth.js';
 import { ProfileResponse, ProfilePatchBody } from '../../common/types.js';
 import type ConfigStateless from '../config.js';
-import { sql } from 'drizzle-orm';
 import ProfileControl from '../lib/control/profile.js';
 
 type ProfilePatchBodyType = Static<typeof ProfilePatchBody>;
@@ -40,22 +39,12 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             const user = await Auth.as_user(config, req);
 
             const profileBody = req.body as ProfilePatchBodyType;
-
-            if (profileBody.plugin_settings) {
-                await profileControl.mergePluginSettings(user.email, profileBody.plugin_settings);
-            }
-
             const profile_config: Record<string, ProfilePatchValue> = {};
             for (const key of Object.keys(profileBody) as Array<keyof ProfilePatchBodyType>) {
-                if (key === 'plugin_settings') continue;
                 profile_config[String(key).replace('_', '::')] = profileBody[key];
             }
 
             await config.models.ProfileConfig.commit(user.email, profile_config);
-
-            await config.models.Profile.commit(user.email, {
-                updated: sql`Now()`,
-            });
 
             const profile = await profileControl.from(user.email);
 
