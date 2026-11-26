@@ -6,7 +6,7 @@ import type { Router } from 'vue-router';
 
 const PATCH = vi.hoisted(() => vi.fn());
 
-vi.mock('../std.ts', () => ({ server: { PATCH }, std: vi.fn(), stdurl: vi.fn() }));
+vi.mock('../std.ts', () => ({ server: { PATCH }, std: vi.fn(), stdurl: vi.fn(), bearer: () => undefined, getRuntimeToken: async () => undefined }));
 vi.mock('../stores/map.ts', () => ({ useMapStore: () => ({}) }));
 vi.mock('../stores/float.ts', () => ({ useFloatStore: () => ({}) }));
 
