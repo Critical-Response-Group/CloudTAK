@@ -222,6 +222,23 @@ test('PATCH: api/profile - plugin_settings rejects an invalid plugin key', async
     }
 });
 
+test('PATCH: api/profile - plugin_settings rejects __proto__ as a plugin key', async () => {
+    try {
+        const res = await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: token },
+            body: JSON.parse('{"plugin_settings":{"__proto__":"synthetic-value"}}'),
+        }, false);
+
+        assert.equal(res.status, 400);
+
+        const stored = await flight.config!.models.ProfileConfig.from('user@example.com');
+        assert.equal(Object.hasOwn(stored['plugin::settings'] as object, '__proto__'), false);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
 test('GET: api/profile - plugin_settings survive logout and reach a second session', async () => {
     try {
         const logout = await flight.fetch(`/api/user/user@example.com/session/${session}`, {

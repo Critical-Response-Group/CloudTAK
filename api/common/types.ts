@@ -587,8 +587,8 @@ export const Profile = Type.Object({
     }), { maxItems: 500 }),
 
     plugin_settings: Type.Record(Type.String(), Type.String({ maxLength: 4096 }), {
-        description: 'Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one',
-        propertyNames: { pattern: '^[\\w.-]{1,64}$' },
+        description: 'Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one. Keys are 1-64 letters, digits, `_`, `.` or `-`, and not `__proto__`',
+        propertyNames: { pattern: '^(?!__proto__$)[\\w.-]{1,64}$' },
         maxProperties: 100,
     }),
 });

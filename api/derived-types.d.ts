@@ -57829,7 +57829,7 @@ export interface paths {
                             geometry_point_color?: string;
                             geometry_point_icon?: string;
                             icon_favorites: string[];
-                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one. Keys are 1-64 letters, digits, `_`, `.` or `-`, and not `__proto__` */
                             plugin_settings: {
                                 [key: string]: string;
                             };
@@ -57968,7 +57968,7 @@ export interface paths {
                         geometry_point_color?: string;
                         geometry_point_icon?: string;
                         icon_favorites?: string[];
-                        /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                        /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one. Keys are 1-64 letters, digits, `_`, `.` or `-`, and not `__proto__` */
                         plugin_settings?: {
                             [key: string]: string;
                         };
@@ -58038,7 +58038,7 @@ export interface paths {
                             geometry_point_color?: string;
                             geometry_point_icon?: string;
                             icon_favorites: string[];
-                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one. Keys are 1-64 letters, digits, `_`, `.` or `-`, and not `__proto__` */
                             plugin_settings: {
                                 [key: string]: string;
                             };
