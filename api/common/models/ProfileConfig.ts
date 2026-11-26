@@ -78,7 +78,7 @@ export default class ProfileConfigModel {
 
             if (opts.touch) {
                 await tx.update(Profile)
-                    .set({ updated: timestamp })
+                    .set({ updated: sql`Now()` })
                     .where(eq(Profile.username, username));
             }
         });

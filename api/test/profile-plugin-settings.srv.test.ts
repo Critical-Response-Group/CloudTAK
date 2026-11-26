@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { inspect } from 'node:util';
+import Err from '@openaddresses/batch-error';
 import postgres from 'postgres';
 import { Pool } from '@openaddresses/batch-generic';
 import ProfileConfigModel from '../common/models/ProfileConfig.js';
@@ -157,13 +158,29 @@ test('ProfileConfig.commit - resolves once the write commits, whatever a later r
 test('ProfileConfig.commit - a failed plugin_settings write raises an error that carries no plugin value', async () => {
     const marker = 'synthetic-plugin-secret';
 
+    await assert.rejects(
+        flight.config!.models.ProfileConfig.commit('missing@example.com', { 'plugin::settings': { demo: marker } }),
+        (err: Err) => {
+            assert.equal(err.status, 500);
+            assert.equal(err.safe, 'Failed to save plugin settings');
+            assert.equal(inspect(err, { depth: null }).includes(marker), false);
+            assert.equal(JSON.stringify(err).includes(marker), false);
+            return true;
+        },
+    );
+});
+
+test('ProfileConfig.commit - touches Profile.updated with the database clock, not the host clock', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date('2000-01-01T00:00:00Z') });
+
     try {
-        await flight.config!.models.ProfileConfig.commit('missing@example.com', { 'plugin::settings': { demo: marker } });
-        assert.fail('commit succeeded for a user that does not exist');
-    } catch (err) {
-        assert.equal(inspect(err, { depth: null }).includes(marker), false);
-        assert.equal(JSON.stringify(err).includes(marker), false);
+        await flight.config!.models.ProfileConfig.commit('user@example.com', { 'tak::remarks': 'Host clock behind' }, { touch: true });
+    } finally {
+        t.mock.timers.reset();
     }
+
+    const profile = await flight.config!.models.Profile.from('user@example.com');
+    assert.ok(new Date(profile.updated).getUTCFullYear() > 2000, `updated was ${profile.updated}`);
 });
 
 test('PATCH: api/profile - a plugin_settings write leaves a new user on first run', async () => {
