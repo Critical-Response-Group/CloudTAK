@@ -53,7 +53,7 @@ export default class ProfileConfigModel {
 
                 const value = typeof raw === 'string' ? raw : JSON.stringify(raw);
 
-                await tx.insert(ProfileSetting)
+                const upsert = tx.insert(ProfileSetting)
                     .values({
                         username,
                         key,
@@ -64,6 +64,16 @@ export default class ProfileConfigModel {
                         target: [ProfileSetting.username, ProfileSetting.key],
                         set: { value, updated: timestamp },
                     });
+
+                if (key === 'plugin::settings') {
+                    try {
+                        await upsert;
+                    } catch {
+                        throw new Err(500, null, 'Failed to save plugin settings');
+                    }
+                } else {
+                    await upsert;
+                }
             }
 
             if (opts.touch) {

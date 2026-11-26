@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import { inspect } from 'node:util';
 import postgres from 'postgres';
 import { Pool } from '@openaddresses/batch-generic';
 import ProfileConfigModel from '../common/models/ProfileConfig.js';
@@ -151,6 +152,18 @@ test('ProfileConfig.commit - resolves once the write commits, whatever a later r
     }
 
     assert.equal((await model.from('user@example.com'))['tak::remarks'], 'Committed');
+});
+
+test('ProfileConfig.commit - a failed plugin_settings write raises an error that carries no plugin value', async () => {
+    const marker = 'synthetic-plugin-secret';
+
+    try {
+        await flight.config!.models.ProfileConfig.commit('missing@example.com', { 'plugin::settings': { demo: marker } });
+        assert.fail('commit succeeded for a user that does not exist');
+    } catch (err) {
+        assert.equal(inspect(err, { depth: null }).includes(marker), false);
+        assert.equal(JSON.stringify(err).includes(marker), false);
+    }
 });
 
 test('PATCH: api/profile - a plugin_settings write leaves a new user on first run', async () => {
