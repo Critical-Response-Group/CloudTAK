@@ -443,7 +443,7 @@ export default class AtlasProfile {
             freqChanged = true;
         }
 
-        const started = Date.now();
+        const fetchStartedAt = Date.now();
         const { data: profile, error } = await server.PATCH('/api/profile', {
             headers: bearer(this.atlas.token),
             body
@@ -451,7 +451,7 @@ export default class AtlasProfile {
 
         if (error) throw new Error(error.message);
 
-        await ProfileConfig.saveAll(profile, started);
+        await ProfileConfig.saveAll(profile, fetchStartedAt);
 
         if (freqChanged) {
             this.setupTimer();

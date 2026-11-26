@@ -4,6 +4,8 @@ import { Profile, ProfileSetting } from '../schema.js';
 import { and, eq, sql } from 'drizzle-orm';
 import * as pgtypes from '../schema.js';
 
+type Tx = Parameters<Parameters<Pool<typeof pgtypes>['transaction']>[0]>[0];
+
 export default class ProfileConfigModel {
     pool: Pool<typeof pgtypes>;
 
@@ -28,11 +30,6 @@ export default class ProfileConfigModel {
         return config;
     }
 
-    /**
-     * Write settings & touch the Profile in one transaction - `plugin::settings` is
-     * merged into the stored keys under a per-user advisory lock, an empty string
-     * removes a key
-     */
     async commit(username: string, config: Record<string, unknown>): Promise<Record<string, unknown>> {
         const timestamp = new Date().toISOString();
 
@@ -42,20 +39,7 @@ export default class ProfileConfigModel {
                 if (raw === undefined) continue;
 
                 if (key === 'plugin::settings') {
-                    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`plugin::settings:${username}`}::text))`);
-
-                    const [current] = await tx.select({ value: ProfileSetting.value })
-                        .from(ProfileSetting)
-                        .where(and(eq(ProfileSetting.username, username), eq(ProfileSetting.key, key)));
-
-                    raw = Object.fromEntries(Object.entries({
-                        ...(current ? JSON.parse(current.value) as Record<string, string> : {}),
-                        ...raw as Record<string, string>,
-                    }).filter(([, value]) => value !== ''));
-
-                    if (Object.keys(raw as Record<string, string>).length > 100) {
-                        throw new Err(400, null, 'A profile holds at most 100 plugin settings');
-                    }
+                    raw = await this.#mergePluginSettings(tx, username, raw as Record<string, string>);
                 }
 
                 const value = typeof raw === 'string' ? raw : JSON.stringify(raw);
@@ -79,5 +63,24 @@ export default class ProfileConfigModel {
         });
 
         return this.from(username);
+    }
+
+    async #mergePluginSettings(tx: Tx, username: string, incoming: Record<string, string>): Promise<Record<string, string>> {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`plugin::settings:${username}`}::text))`);
+
+        const [current] = await tx.select({ value: ProfileSetting.value })
+            .from(ProfileSetting)
+            .where(and(eq(ProfileSetting.username, username), eq(ProfileSetting.key, 'plugin::settings')));
+
+        const merged = Object.fromEntries(Object.entries({
+            ...(current ? JSON.parse(current.value) as Record<string, string> : {}),
+            ...incoming,
+        }).filter(([, value]) => value !== ''));
+
+        if (Object.keys(merged).length > 100) {
+            throw new Err(400, null, 'A profile holds at most 100 plugin settings');
+        }
+
+        return merged;
     }
 }
