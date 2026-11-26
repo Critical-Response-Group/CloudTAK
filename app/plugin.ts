@@ -15,7 +15,7 @@ import type { HistoryPopupRenderer, HistoryPointStyler, HistoryPointStyle } from
 import { liveQuery } from 'dexie';
 import { from, type Observable } from 'rxjs';
 import * as mapgl from 'maplibre-gl';
-import { std, stdurl } from './src/std.ts';
+import { server, std, stdurl } from './src/std.ts';
 
 const FloatingGeneric = defineAsyncComponent(() => import('./src/components/CloudTAK/util/FloatingGeneric.vue'));
 
@@ -573,7 +573,13 @@ export class PluginAPI {
              * @param value The value to keep, or an empty string to remove the key
              */
             setPluginSetting: async (key: string, value: string): Promise<void> => {
-                await ProfileConfig.setPluginSetting(key, value);
+                const { data, error } = await server.PATCH('/api/profile', {
+                    body: { plugin_settings: { [key]: value } }
+                });
+
+                if (error) throw new Error(error.message);
+
+                await db.profile.put({ key: 'plugin_settings', value: data.plugin_settings });
             }
         }
     }

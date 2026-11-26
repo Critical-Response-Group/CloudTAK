@@ -307,7 +307,6 @@ export interface DBMissionTemplateLog {
 export interface DBProfileConfig {
     key: string;
     value: unknown;
-    localWriteAt?: number;
 }
 
 export interface DBConfig {
