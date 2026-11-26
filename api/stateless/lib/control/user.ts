@@ -31,7 +31,7 @@ export default class UserControl {
     ): Promise<InferSelectModel<typeof Profile>> {
         const profile = await this.config.models.Profile.generate(input);
 
-        // Create a new ProfileConfig for each default setting.
+        // Write every default setting in one commit.
         // For display settings (present in FullConfig) check for admin-configured system defaults;
         // for all other settings (tak::*, menu::*) use the ProfileConfigDefaults directly.
         const displayDefaults = {
@@ -51,20 +51,10 @@ export default class UserControl {
 
         const systemDisplayDefaults = await this.config.models.Setting.typedMany(displayDefaults);
 
-        const configs: Array<Promise<unknown>> = [];
-
-        for (const [key, value] of Object.entries(systemDisplayDefaults)) {
-            configs.push(this.config.models.ProfileConfig.commit(profile.username, { [key]: value }));
-        }
-
-        for (const key of Object.keys(ProfileConfigDefaults) as (keyof typeof ProfileConfigDefaults)[]) {
-            if (key in displayDefaults) continue;
-            configs.push(this.config.models.ProfileConfig.commit(profile.username, {
-                [key]: ProfileConfigDefaults[key],
-            }));
-        }
-
-        await Promise.all(configs);
+        await this.config.models.ProfileConfig.commit(profile.username, {
+            ...ProfileConfigDefaults,
+            ...systemDisplayDefaults,
+        });
 
         const overlayControl = new ProfileOverlayControl(this.config);
         await overlayControl.ensureDefaultBasemap(profile.username);
