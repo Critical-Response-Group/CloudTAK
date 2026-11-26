@@ -141,6 +141,8 @@ export default class UserControl {
         }
 
         await this.config.pg.transaction(async (tx) => {
+            await this.config.models.ProfileConfig.lock(tx, username);
+
             const iconsets = (await tx.select({ uid: Iconset.uid }).from(Iconset).where(eq(Iconset.username, username)))
                 .map(iconset => iconset.uid);
 

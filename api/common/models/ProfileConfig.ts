@@ -41,7 +41,7 @@ export default class ProfileConfigModel {
         const timestamp = new Date().toISOString();
 
         await this.pool.transaction(async (tx) => {
-            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`profile::settings:${username}`}::text))`);
+            await this.lock(tx, username);
 
             for (const key of Object.keys(config)) {
                 let raw = config[key];
@@ -74,6 +74,14 @@ export default class ProfileConfigModel {
         });
 
         return this.from(username);
+    }
+
+    /**
+     * Take the per-user advisory lock every write to a user's settings holds first,
+     * so writes that touch settings in any order cannot deadlock
+     */
+    async lock(tx: Tx, username: string): Promise<void> {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`profile::settings:${username}`}::text))`);
     }
 
     async #mergePluginSettings(tx: Tx, username: string, incoming: Record<string, string>): Promise<Record<string, string>> {
