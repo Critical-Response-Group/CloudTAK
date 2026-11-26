@@ -47,14 +47,26 @@ export default class ProfileConfig<K extends keyof Profile = keyof Profile> {
         return data as unknown as Profile;
     }
 
+    /**
+     * Save locally then on the server, stamping the value again once the server
+     * has it so a profile fetched in between does not replace it
+     */
     async commit(value: Profile[K]): Promise<void> {
+        const written = Date.now();
         await db.profile.put({
             key: this.key,
-            value
+            value,
+            updated: written
         });
 
         await server.PATCH('/api/profile', {
             body: { [this.key]: value } as Record<string, unknown>
+        });
+
+        await db.transaction('rw', db.profile, async () => {
+            const entry = await db.profile.get(this.key);
+            if ((entry?.updated ?? 0) > written) return;
+            await db.profile.put({ key: this.key, value, updated: Date.now() });
         });
     }
 
@@ -68,18 +80,52 @@ export default class ProfileConfig<K extends keyof Profile = keyof Profile> {
         const count = await db.profile.count();
         if (count > 0 && !opts.refresh) return;
 
+        const started = Date.now();
         const fresh = await this.fetch();
-        await this.saveAll(fresh);
+        await this.saveAll(fresh, started);
     }
 
-    static async saveAll(profile: Profile): Promise<void> {
-        const entries: DBProfileConfig[] = [];
-        for (const key of Object.keys(profile)) {
-            entries.push({
-                key,
-                value: profile[key as keyof Profile]
+    /**
+     * Store a profile fetched from the server, skipping values this device
+     * wrote after `started`, when the request for it began
+     */
+    static async saveAll(profile: Profile, started: number): Promise<void> {
+        await db.transaction('rw', db.profile, async () => {
+            const keys = Object.keys(profile);
+            const existing = await db.profile.bulkGet(keys);
+
+            const entries: DBProfileConfig[] = [];
+            keys.forEach((key, i) => {
+                if ((existing[i]?.updated ?? 0) >= started) return;
+                entries.push({
+                    key,
+                    value: profile[key as keyof Profile]
+                });
             });
-        }
-        await db.profile.bulkPut(entries);
+
+            await db.profile.bulkPut(entries);
+        });
+    }
+
+    /**
+     * Keep a string for a plugin in `plugin_settings`, an empty string removes it.
+     * Only this key changes locally, so responses arriving out of order lose nothing
+     */
+    static async setPluginSetting(key: string, value: string): Promise<void> {
+        const { error } = await server.PATCH('/api/profile', {
+            body: { plugin_settings: { [key]: value } }
+        });
+
+        if (error) throw new Error(error.message);
+
+        await db.transaction('rw', db.profile, async () => {
+            const entry = await db.profile.get('plugin_settings');
+            const settings = Object.fromEntries(Object.entries({
+                ...entry?.value as Record<string, string> | undefined,
+                [key]: value
+            }).filter(([, setting]) => setting !== ''));
+
+            await db.profile.put({ key: 'plugin_settings', value: settings, updated: Date.now() });
+        });
     }
 }

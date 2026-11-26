@@ -15,11 +15,9 @@ import type { HistoryPopupRenderer, HistoryPointStyler, HistoryPointStyle } from
 import { liveQuery } from 'dexie';
 import { from, type Observable } from 'rxjs';
 import * as mapgl from 'maplibre-gl';
-import { server, std, stdurl } from './src/std.ts';
+import { std, stdurl } from './src/std.ts';
 
 const FloatingGeneric = defineAsyncComponent(() => import('./src/components/CloudTAK/util/FloatingGeneric.vue'));
-
-let pluginSettingsChain: Promise<void> = Promise.resolve();
 
 export type { MenuItemConfig };
 export type { BottomBarItemConfig };
@@ -571,23 +569,11 @@ export class PluginAPI {
              * Keep a string for the plugin in the user's profile. Unlike local
              * storage it survives logout and follows the user to other devices.
              * Read it back from `plugin_settings` with `get` or `stream`.
-             * Calls run one at a time, in the order they were made.
              * @param key The plugin's key, e.g. `crg-map-layers`
              * @param value The value to keep, or an empty string to remove the key
              */
-            setPluginSetting: (key: string, value: string): Promise<void> => {
-                const run = pluginSettingsChain.then(async () => {
-                    const { data, error } = await server.PATCH('/api/profile', {
-                        body: { plugin_settings: { [key]: value } }
-                    });
-
-                    if (error) throw new Error(error.message);
-
-                    await db.profile.put({ key: 'plugin_settings', value: data.plugin_settings });
-                });
-
-                pluginSettingsChain = run.catch(() => undefined);
-                return run;
+            setPluginSetting: async (key: string, value: string): Promise<void> => {
+                await ProfileConfig.setPluginSetting(key, value);
             }
         }
     }

@@ -307,6 +307,8 @@ export interface DBMissionTemplateLog {
 export interface DBProfileConfig {
     key: string;
     value: unknown;
+    /** When this device last wrote the value - a profile fetched before then does not replace it */
+    updated?: number;
 }
 
 export interface DBConfig {

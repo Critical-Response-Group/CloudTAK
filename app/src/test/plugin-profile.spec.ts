@@ -4,14 +4,15 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import type { Router } from 'vue-router';
 
-const PATCH = vi.hoisted(() => vi.fn());
+const { GET, PATCH } = vi.hoisted(() => ({ GET: vi.fn(), PATCH: vi.fn() }));
 
-vi.mock('../std.ts', () => ({ server: { PATCH }, std: vi.fn(), stdurl: vi.fn() }));
+vi.mock('../std.ts', () => ({ server: { GET, PATCH }, std: vi.fn(), stdurl: vi.fn() }));
 vi.mock('../stores/map.ts', () => ({ useMapStore: () => ({}) }));
 vi.mock('../stores/float.ts', () => ({ useFloatStore: () => ({}) }));
 
 import { PluginAPI } from '../../plugin.ts';
 import { db } from '../database.ts';
+import ProfileConfig from '../base/profile.ts';
 
 function pluginAPI(): PluginAPI {
     return new PluginAPI(createApp({}), {} as Router, createPinia());
@@ -19,14 +20,14 @@ function pluginAPI(): PluginAPI {
 
 describe('PluginAPI profile.setPluginSetting', () => {
     beforeEach(async () => {
+        GET.mockReset();
         PATCH.mockReset();
         await db.profile.clear();
     });
 
-    it('patches only plugin_settings and reads back the merged settings', async () => {
-        PATCH.mockResolvedValue({
-            data: { plugin_settings: { other: 'value', 'crg-map-layers': 'crg-authkey' } }
-        });
+    it('patches only its own key and keeps the other plugin settings', async () => {
+        await db.profile.put({ key: 'plugin_settings', value: { other: 'value' } });
+        PATCH.mockResolvedValue({ data: {} });
 
         const api = pluginAPI();
         await api.profile.setPluginSetting('crg-map-layers', 'crg-authkey');
@@ -38,6 +39,9 @@ describe('PluginAPI profile.setPluginSetting', () => {
             other: 'value',
             'crg-map-layers': 'crg-authkey'
         });
+
+        await api.profile.setPluginSetting('other', '');
+        expect(await api.profile.get('plugin_settings')).toEqual({ 'crg-map-layers': 'crg-authkey' });
     });
 
     it('keeps the newest settings when an older response arrives last', async () => {
@@ -58,6 +62,25 @@ describe('PluginAPI profile.setPluginSetting', () => {
         ]);
 
         expect(await api.profile.get('plugin_settings')).toEqual({ first: 'one', second: 'two' });
+    });
+
+    it('keeps a new setting when an older profile refresh lands after it', async () => {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        GET.mockImplementation(async () => {
+            const snapshot = { plugin_settings: {} };
+            await gate;
+            return { data: snapshot };
+        });
+        PATCH.mockResolvedValue({ data: { plugin_settings: { 'crg-map-layers': 'crg-authkey' } } });
+
+        const api = pluginAPI();
+        const refresh = ProfileConfig.sync({ refresh: true });
+        await api.profile.setPluginSetting('crg-map-layers', 'crg-authkey');
+        release();
+        await refresh;
+
+        expect(await api.profile.get('plugin_settings')).toEqual({ 'crg-map-layers': 'crg-authkey' });
     });
 
     it('rejects and leaves the local profile unchanged when the server refuses', async () => {
