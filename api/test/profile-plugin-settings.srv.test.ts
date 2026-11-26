@@ -228,16 +228,41 @@ test('PATCH: api/profile - a write that fails part way saves nothing', async () 
     }
 });
 
-test('PATCH: api/profile - a string that looks like JSON stays a string beside plugin_settings', async () => {
+test('PATCH: api/profile - plugin_settings rejects values that are not strings', async () => {
     try {
-        const saved = await flight.fetch('/api/profile', {
+        for (const value of [null, 1, true]) {
+            const res = await flight.fetch('/api/profile', {
+                method: 'PATCH',
+                auth: { bearer: token },
+                body: { plugin_settings: { 'crg-map-layers': value } },
+            }, false);
+
+            assert.equal(res.status, 400, `${JSON.stringify(value)} is rejected`);
+        }
+
+        const profile = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: token },
+        }, true);
+
+        assert.deepEqual(profile.body.plugin_settings, { 'crg-map-layers': 'crg-authkey' });
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('PATCH & GET: api/profile - a profile that fails response validation logs no plugin_settings', async (t) => {
+    const logged: string[] = [];
+    for (const method of ['log', 'warn', 'error'] as const) {
+        t.mock.method(console, method, (...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
+    }
+
+    try {
+        await flight.fetch('/api/profile', {
             method: 'PATCH',
             auth: { bearer: token },
             body: { tak_remarks: '{"looks":"like json"}' },
         }, false);
-
-        assert.equal(saved.status, 200);
-        assert.equal(saved.body.tak_remarks, '{"looks":"like json"}');
 
         const plugin = await flight.fetch('/api/profile', {
             method: 'PATCH',
@@ -245,10 +270,22 @@ test('PATCH: api/profile - a string that looks like JSON stays a string beside p
             body: { plugin_settings: { 'crg-map-layers': 'crg-authkey' } },
         }, false);
 
-        assert.equal(plugin.status, 200);
-        assert.equal(plugin.body.tak_remarks, '{"looks":"like json"}');
+        const get = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: token },
+        }, false);
+
+        t.mock.restoreAll();
+
+        assert.equal(plugin.status, 400);
+        assert.equal(get.status, 400);
+        assert.equal(JSON.stringify(plugin.body).includes('crg-authkey'), false);
+        assert.deepEqual(logged.filter((line) => line.includes('crg-authkey')), []);
     } catch (err) {
+        t.mock.restoreAll();
         assert.ifError(err);
+    } finally {
+        await flight.config!.models.ProfileConfig.commit('user@example.com', { 'tak::remarks': 'CloudTAK User' });
     }
 });
 

@@ -534,6 +534,17 @@ export const ProfileListResponse = Type.Object({
     certificate: Type.Optional(CertificateResponse),
 });
 
+/**
+ * Rejects null, booleans & numbers before request validation coerces them to
+ * strings - it uses only keywords that never coerce, so it must sit beside a
+ * schema that applies `type: 'string'` rather than inside it
+ */
+const NotCoercibleToString = {
+    not: { enum: [null, true, false] },
+    minimum: 1,
+    maximum: 0,
+};
+
 export const Profile = Type.Object({
     tak_callsign: Type.String(),
     tak_remarks: Type.String(),
@@ -590,6 +601,7 @@ export const Profile = Type.Object({
         description: 'Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one. Keys are 1-64 letters, digits, `_`, `.` or `-`, and not `__proto__`',
         propertyNames: { pattern: '^(?!__proto__$)[\\w.-]{1,64}$' },
         maxProperties: 100,
+        allOf: [{ patternProperties: { '^(.*)$': NotCoercibleToString } }],
     }),
 });
 

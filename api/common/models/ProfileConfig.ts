@@ -51,7 +51,7 @@ export default class ProfileConfigModel {
                     raw = await this.#mergePluginSettings(tx, username, raw as Record<string, string>);
                 }
 
-                const value = JSON.stringify(raw);
+                const value = typeof raw === 'string' ? raw : JSON.stringify(raw);
 
                 await tx.insert(ProfileSetting)
                     .values({
