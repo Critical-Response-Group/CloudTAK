@@ -37,7 +37,7 @@ export default class ProfileConfigModel {
      */
     async commit(username: string, config: Record<string, unknown>, opts: {
         touch?: boolean;
-    } = {}): Promise<Record<string, unknown>> {
+    } = {}): Promise<void> {
         const timestamp = new Date().toISOString();
 
         await this.pool.transaction(async (tx) => {
@@ -72,8 +72,6 @@ export default class ProfileConfigModel {
                     .where(eq(Profile.username, username));
             }
         });
-
-        return this.from(username);
     }
 
     /**

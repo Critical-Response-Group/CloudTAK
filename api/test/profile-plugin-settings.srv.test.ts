@@ -138,6 +138,21 @@ test('ProfileConfig.commit - writes naming plugin::settings and another key in o
     }
 });
 
+test('ProfileConfig.commit - resolves once the write commits, whatever a later read does', async (t) => {
+    const model = flight.config!.models.ProfileConfig;
+    t.mock.method(model, 'from', async () => { throw new Error('read after commit failed'); });
+
+    try {
+        await model.commit('user@example.com', { 'tak::remarks': 'Committed' });
+    } catch (err) {
+        assert.ifError(err);
+    } finally {
+        t.mock.restoreAll();
+    }
+
+    assert.equal((await model.from('user@example.com'))['tak::remarks'], 'Committed');
+});
+
 test('PATCH: api/profile - a plugin_settings write leaves a new user on first run', async () => {
     try {
         const before = await flight.fetch('/api/profile', {
