@@ -48,7 +48,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             if (profileBody.plugin_settings) {
                 const current = await config.models.ProfileConfig.from(user.email);
                 const plugin_settings = Object.fromEntries(Object.entries({
-                    ...current['plugin::settings'] as ProfilePatchBodyType['plugin_settings'],
+                    ...current['plugin::settings'] as Record<string, string> | undefined,
                     ...profileBody.plugin_settings,
                 }).filter(([, value]) => value !== ''));
 
