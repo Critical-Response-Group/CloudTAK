@@ -16,7 +16,7 @@ import { liveQuery } from 'dexie';
 import { from, type Observable } from 'rxjs';
 import * as mapgl from 'maplibre-gl';
 import { std, stdurl } from './src/std.ts';
-import MenuTemplate from './src/components/CloudTAK/util/MenuTemplate.vue';
+import MenuTemplateComponent from './src/components/CloudTAK/util/MenuTemplate.vue';
 
 const FloatingGeneric = defineAsyncComponent(() => import('./src/components/CloudTAK/util/FloatingGeneric.vue'));
 
@@ -28,7 +28,13 @@ export type { FeatureHistory_ListOptions };
 export type { HistoryPopupRenderer, HistoryPointStyler, HistoryPointStyle };
 export type { Profile };
 export { FeatureHistorySource };
-export { MenuTemplate };
+
+/**
+ * Menu panel used by CloudTAK's core menus: a header with `name`, `subtitle`, back or close
+ * and a `buttons` slot, a scrolling body, and a `footer` slot. On mobile it opens as a full
+ * screen modal unless `standalone` is false
+ */
+export const MenuTemplate = MenuTemplateComponent;
 
 /** Time window for CoT history queries - TAK Server answers at most 24 hours */
 export type HistoryWindow = {
