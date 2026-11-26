@@ -45,6 +45,20 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 profile_config[String(key).replace('_', '::')] = profileBody[key];
             }
 
+            if (profileBody.plugin_settings) {
+                const current = await config.models.ProfileConfig.from(user.email);
+                const plugin_settings = Object.fromEntries(Object.entries({
+                    ...current['plugin::settings'] as ProfilePatchBodyType['plugin_settings'],
+                    ...profileBody.plugin_settings,
+                }).filter(([, value]) => value !== ''));
+
+                if (Object.keys(plugin_settings).length > 100) {
+                    throw new Err(400, null, 'A profile holds at most 100 plugin settings');
+                }
+
+                profile_config['plugin::settings'] = plugin_settings;
+            }
+
             await config.models.ProfileConfig.commit(user.email, profile_config);
 
             await config.models.Profile.commit(user.email, {

@@ -37,6 +37,7 @@ test('GET: api/profile', async () => {
             tak_loc_freq: 2000,
             menu_order: [],
             icon_favorites: [],
+            plugin_settings: {},
             display_stale: '10 Minutes',
             display_distance: 'mile',
             display_elevation: 'feet',
@@ -100,6 +101,7 @@ test('PATCH: api/profile', async () => {
             tak_loc_freq: 2000,
             menu_order: [],
             icon_favorites: [],
+            plugin_settings: {},
             display_stale: '10 Minutes',
             display_distance: 'mile',
             display_elevation: 'feet',
@@ -241,6 +243,7 @@ test('GET: api/profile - New User / New Defaults', async () => {
             tak_loc_freq: 2000,
             menu_order: [],
             icon_favorites: [],
+            plugin_settings: {},
             display_stale: 'Immediate',
             display_distance: 'meter',
             display_elevation: 'meter',
@@ -302,6 +305,7 @@ test('PATCH: api/profile - Icon Favorites', async () => {
             },
             body: {
                 icon_favorites: [],
+                plugin_settings: {},
             },
         }, true);
 

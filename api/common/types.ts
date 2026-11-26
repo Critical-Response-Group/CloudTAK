@@ -585,6 +585,12 @@ export const Profile = Type.Object({
     icon_favorites: Type.Array(Type.String({
         description: 'Icon reference in the form <iconset uid>:<icon path>',
     }), { maxItems: 500 }),
+
+    plugin_settings: Type.Record(Type.String(), Type.String({ maxLength: 4096 }), {
+        description: 'Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one',
+        propertyNames: { pattern: '^[\\w.-]{1,64}$' },
+        maxProperties: 100,
+    }),
 });
 
 export const ProfilePatchBody = Type.Partial(Profile);

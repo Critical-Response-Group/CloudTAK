@@ -57829,6 +57829,10 @@ export interface paths {
                             geometry_point_color?: string;
                             geometry_point_icon?: string;
                             icon_favorites: string[];
+                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                            plugin_settings: {
+                                [key: string]: string;
+                            };
                         };
                     };
                 };
@@ -57964,6 +57968,10 @@ export interface paths {
                         geometry_point_color?: string;
                         geometry_point_icon?: string;
                         icon_favorites?: string[];
+                        /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                        plugin_settings?: {
+                            [key: string]: string;
+                        };
                     };
                 };
             };
@@ -58030,6 +58038,10 @@ export interface paths {
                             geometry_point_color?: string;
                             geometry_point_icon?: string;
                             icon_favorites: string[];
+                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                            plugin_settings: {
+                                [key: string]: string;
+                            };
                         };
                     };
                 };
@@ -61994,6 +62006,10 @@ export interface paths {
                             geometry_point_color?: string;
                             geometry_point_icon?: string;
                             icon_favorites: string[];
+                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                            plugin_settings: {
+                                [key: string]: string;
+                            };
                             /** @description Public metadata of an X509 certificate - clients derive expiry state from validTo */
                             certificate?: {
                                 subject: string;
@@ -62283,6 +62299,10 @@ export interface paths {
                             geometry_point_color?: string;
                             geometry_point_icon?: string;
                             icon_favorites: string[];
+                            /** @description Strings kept by web plugins, keyed by plugin. A PATCH merges keys and an empty string removes one */
+                            plugin_settings: {
+                                [key: string]: string;
+                            };
                             /** @description Public metadata of an X509 certificate - clients derive expiry state from validTo */
                             certificate?: {
                                 subject: string;

@@ -37,6 +37,8 @@ export const ProfileConfigDefaults = {
 
     'icon::favorites': [],
 
+    'plugin::settings': {},
+
     'tak::phone': '',
 
     'tak::callsign': 'CloudTAK User',

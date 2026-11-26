@@ -15,7 +15,7 @@ import type { HistoryPopupRenderer, HistoryPointStyler, HistoryPointStyle } from
 import { liveQuery } from 'dexie';
 import { from, type Observable } from 'rxjs';
 import * as mapgl from 'maplibre-gl';
-import { std, stdurl } from './src/std.ts';
+import { server, std, stdurl } from './src/std.ts';
 
 const FloatingGeneric = defineAsyncComponent(() => import('./src/components/CloudTAK/util/FloatingGeneric.vue'));
 
@@ -531,7 +531,7 @@ export class PluginAPI {
 
     /**
      * Read the signed-in user's profile settings, such as the display units
-     * chosen under Settings. Settings are read-only to plugins.
+     * chosen under Settings. Plugins can write only `plugin_settings`.
      */
     get profile() {
         return {
@@ -564,6 +564,22 @@ export class PluginAPI {
                     profile[entry.key] = entry.value;
                 }
                 return profile as Partial<Profile>;
+            },
+            /**
+             * Keep a string for the plugin in the user's profile. Unlike local
+             * storage it survives logout and follows the user to other devices.
+             * Read it back from `plugin_settings` with `get` or `stream`.
+             * @param key The plugin's key, e.g. `crg-map-layers`
+             * @param value The value to keep, or an empty string to remove the key
+             */
+            setPluginSetting: async (key: string, value: string): Promise<void> => {
+                const { data, error } = await server.PATCH('/api/profile', {
+                    body: { plugin_settings: { [key]: value } }
+                });
+
+                if (error) throw new Error(error.message);
+
+                await db.profile.put({ key: 'plugin_settings', value: data.plugin_settings });
             }
         }
     }
