@@ -102,7 +102,14 @@ test('ProfileConfig.commit - writes naming plugin::settings and another key in o
 
         const advisory = async (granted: boolean) => {
             for (let i = 0; i < 100; i++) {
-                const [{ count }] = await sql`SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND granted = ${granted}`;
+                const [{ count }] = await sql`
+                    SELECT count(*)::int AS count
+                        FROM pg_locks
+                        WHERE locktype = 'advisory'
+                            AND granted = ${granted}
+                            AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+                            AND objid::bigint = (hashtext(${'profile::settings:user@example.com'}::text)::bigint & 4294967295)
+                `;
                 if (count > 0) return;
                 await new Promise((resolve) => setTimeout(resolve, 20));
             }
@@ -124,6 +131,7 @@ test('ProfileConfig.commit - writes naming plugin::settings and another key in o
     } catch (err) {
         assert.ifError(err);
     } finally {
+        await holder`ROLLBACK`;
         holder.release();
         await sql.end();
         pool.end();
