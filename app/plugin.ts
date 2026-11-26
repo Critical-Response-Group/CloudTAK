@@ -16,6 +16,7 @@ import { liveQuery } from 'dexie';
 import { from, type Observable } from 'rxjs';
 import * as mapgl from 'maplibre-gl';
 import { std, stdurl } from './src/std.ts';
+import MenuTemplate from './src/components/CloudTAK/util/MenuTemplate.vue';
 
 const FloatingGeneric = defineAsyncComponent(() => import('./src/components/CloudTAK/util/FloatingGeneric.vue'));
 
@@ -27,6 +28,7 @@ export type { FeatureHistory_ListOptions };
 export type { HistoryPopupRenderer, HistoryPointStyler, HistoryPointStyle };
 export type { Profile };
 export { FeatureHistorySource };
+export { MenuTemplate };
 
 /** Time window for CoT history queries - TAK Server answers at most 24 hours */
 export type HistoryWindow = {
