@@ -83,6 +83,50 @@ test('PATCH: api/profile - concurrent plugin_settings writes from two sessions k
     }
 });
 
+test('PATCH: api/profile - a failed write saves no plugin_settings', async () => {
+    try {
+        const res = await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: token },
+            body: { plugin_settings: { partial: 'value' }, tak_remarks: 'nul \u0000 byte' },
+        }, false);
+
+        assert.notEqual(res.status, 200);
+
+        const profile = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: token },
+        }, true);
+
+        assert.deepEqual(profile.body.plugin_settings, { 'crg-map-layers': 'crg-authkey' });
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET & PATCH: api/user/user@example.com - an admin does not see plugin_settings', async () => {
+    try {
+        const get = await flight.fetch('/api/user/user@example.com', {
+            method: 'GET',
+            auth: { bearer: flight.token.admin },
+        }, true);
+
+        assert.equal(get.body.username, 'user@example.com');
+        assert.equal('plugin_settings' in get.body, false);
+
+        const patch = await flight.fetch('/api/user/user@example.com', {
+            method: 'PATCH',
+            auth: { bearer: flight.token.admin },
+            body: { tak_remarks: 'Admin Remarks' },
+        }, true);
+
+        assert.equal(patch.body.tak_remarks, 'Admin Remarks');
+        assert.equal('plugin_settings' in patch.body, false);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
 test('PATCH: api/profile - plugin_settings rejects an invalid plugin key', async () => {
     try {
         const res = await flight.fetch('/api/profile', {

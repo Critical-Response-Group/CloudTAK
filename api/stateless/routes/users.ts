@@ -14,7 +14,7 @@ import UserControl from '../lib/control/user.js';
 import Provider from '../lib/provider.js';
 
 const UserResponse = Type.Composite([
-    ProfileResponse,
+    Type.Omit(ProfileResponse, ['plugin_settings']),
     Type.Object({
         certificate: Type.Optional(CertificateResponse),
     }),
