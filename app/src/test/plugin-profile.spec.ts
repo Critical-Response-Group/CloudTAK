@@ -40,6 +40,26 @@ describe('PluginAPI profile.setPluginSetting', () => {
         });
     });
 
+    it('keeps the newest settings when an older response arrives last', async () => {
+        const stored: Record<string, string> = {};
+        const delays = [20, 0];
+
+        PATCH.mockImplementation(async (_url: string, opts: { body: { plugin_settings: Record<string, string> } }) => {
+            Object.assign(stored, opts.body.plugin_settings);
+            const data = { plugin_settings: { ...stored } };
+            await new Promise((resolve) => setTimeout(resolve, delays.shift()));
+            return { data };
+        });
+
+        const api = pluginAPI();
+        await Promise.all([
+            api.profile.setPluginSetting('first', 'one'),
+            api.profile.setPluginSetting('second', 'two')
+        ]);
+
+        expect(await api.profile.get('plugin_settings')).toEqual({ first: 'one', second: 'two' });
+    });
+
     it('rejects and leaves the local profile unchanged when the server refuses', async () => {
         PATCH.mockResolvedValue({ error: { message: 'Validation Error' } });
 
