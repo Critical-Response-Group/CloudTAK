@@ -172,22 +172,66 @@ test('PATCH: api/profile - a plugin_settings write leaves a new user on first ru
     }
 });
 
-test('PATCH: api/profile - a failed write saves no plugin_settings', async () => {
+test('PATCH: api/profile - a write that fails part way saves nothing', async () => {
+    const filler = Object.fromEntries(Array.from({ length: 99 }, (_, i) => [`filler-${i}`, 'value']));
+
     try {
-        const res = await flight.fetch('/api/profile', {
+        await flight.fetch('/api/profile', {
             method: 'PATCH',
             auth: { bearer: token },
-            body: { plugin_settings: { partial: 'value' }, tak_remarks: 'nul \u0000 byte' },
-        }, false);
+            body: { plugin_settings: filler },
+        }, true);
 
-        assert.notEqual(res.status, 200);
-
-        const profile = await flight.fetch('/api/profile', {
+        const before = await flight.fetch('/api/profile', {
             method: 'GET',
             auth: { bearer: token },
         }, true);
 
-        assert.deepEqual(profile.body.plugin_settings, { 'crg-map-layers': 'crg-authkey' });
+        const res = await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: token },
+            body: { tak_remarks: 'Partial', plugin_settings: { 'over-1': 'value', 'over-2': 'value' } },
+        }, false);
+
+        assert.equal(res.status, 400);
+
+        const after = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: token },
+        }, true);
+
+        assert.equal(after.body.tak_remarks, before.body.tak_remarks);
+        assert.deepEqual(after.body.plugin_settings, before.body.plugin_settings);
+    } catch (err) {
+        assert.ifError(err);
+    } finally {
+        await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: token },
+            body: { plugin_settings: Object.fromEntries(Object.keys(filler).map((key) => [key, ''])) },
+        }, true);
+    }
+});
+
+test('PATCH: api/profile - a string that looks like JSON stays a string beside plugin_settings', async () => {
+    try {
+        const saved = await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: token },
+            body: { tak_remarks: '{"looks":"like json"}' },
+        }, false);
+
+        assert.equal(saved.status, 200);
+        assert.equal(saved.body.tak_remarks, '{"looks":"like json"}');
+
+        const plugin = await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: token },
+            body: { plugin_settings: { 'crg-map-layers': 'crg-authkey' } },
+        }, false);
+
+        assert.equal(plugin.status, 200);
+        assert.equal(plugin.body.tak_remarks, '{"looks":"like json"}');
     } catch (err) {
         assert.ifError(err);
     }
