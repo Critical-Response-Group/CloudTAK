@@ -15,16 +15,9 @@ import type { HistoryPopupRenderer, HistoryPointStyler, HistoryPointStyle } from
 import { liveQuery } from 'dexie';
 import { from, type Observable } from 'rxjs';
 import * as mapgl from 'maplibre-gl';
-import { bearer, getRuntimeToken, server, std, stdurl } from './src/std.ts';
-import { Preferences } from '@capacitor/preferences';
+import { std, stdurl } from './src/std.ts';
 
 const FloatingGeneric = defineAsyncComponent(() => import('./src/components/CloudTAK/util/FloatingGeneric.vue'));
-
-let pluginSettingsChain: Promise<void> = Promise.resolve();
-
-async function getSessionId(): Promise<string | null> {
-    return (await Preferences.get({ key: 'sessionId' })).value;
-}
 
 export type { MenuItemConfig };
 export type { BottomBarItemConfig };
@@ -541,6 +534,7 @@ export class PluginAPI {
      * chosen under Settings. Plugins can write only `plugin_settings`.
      */
     get profile() {
+        const mapStore = useMapStore(this.pinia);
         return {
             /**
              * Current value of a profile setting
@@ -575,32 +569,13 @@ export class PluginAPI {
             /**
              * Keep a string for the plugin in the user's profile. Unlike local
              * storage it survives logout and follows the user to other devices.
+             * It saves through the same profile update as the Settings menu.
              * Read it back from `plugin_settings` with `get` or `stream`.
-             * Calls run one at a time, in the order they were made, and a call
-             * still queued when the user's session changes is rejected.
              * @param key The plugin's key, e.g. `crg-map-layers`
              * @param value The value to keep, or an empty string to remove the key
              */
-            setPluginSetting: (key: string, value: string): Promise<void> => {
-                const session = Promise.all([getRuntimeToken(), getSessionId()]);
-
-                const run = pluginSettingsChain.then(async () => {
-                    const [token, sessionId] = await session;
-                    if (await getSessionId() !== sessionId) throw new Error('Session changed before the plugin setting was saved');
-
-                    const { data, error } = await server.PATCH('/api/profile', {
-                        headers: bearer(token),
-                        body: { plugin_settings: { [key]: value } }
-                    });
-
-                    if (error) throw new Error(error.message);
-                    if (await getSessionId() !== sessionId) throw new Error('Session changed before the plugin setting was saved');
-
-                    await db.profile.put({ key: 'plugin_settings', value: data.plugin_settings });
-                });
-
-                pluginSettingsChain = run.catch(() => undefined);
-                return run;
+            setPluginSetting: async (key: string, value: string): Promise<void> => {
+                await mapStore.worker.profile.update({ plugin_settings: { [key]: value } });
             }
         }
     }
