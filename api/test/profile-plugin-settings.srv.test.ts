@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import postgres from 'postgres';
+import { Pool } from '@openaddresses/batch-generic';
+import ProfileConfigModel from '../common/models/ProfileConfig.js';
+import * as pgtypes from '../common/schema.js';
 import Flight from './flight.js';
 
 const flight = new Flight();
@@ -8,6 +12,7 @@ flight.init({ takserver: true });
 flight.takeoff();
 flight.user();
 flight.user({ username: 'user', admin: false });
+flight.user({ username: 'firstrun', admin: false });
 flight.server('admin@example.com', 'password123');
 
 let session: string;
@@ -78,6 +83,82 @@ test('PATCH: api/profile - concurrent plugin_settings writes from two sessions k
             auth: { bearer: token },
             body: { plugin_settings: Object.fromEntries(keys.map((key) => [key, ''])) },
         }, true);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('ProfileConfig.commit - writes naming plugin::settings and another key in opposite orders do not deadlock', async () => {
+    const connstr = new URL(flight.connstr!);
+    connstr.searchParams.delete('max');
+    const pool = await Pool.connect(connstr.toString(), pgtypes);
+    const model = new ProfileConfigModel(pool);
+    const sql = postgres(flight.connstr!, { max: 2, onnotice: () => {} });
+    const holder = await sql.reserve();
+
+    try {
+        await holder`BEGIN`;
+        await holder`SELECT 1 FROM profile_settings WHERE username = 'user@example.com' AND key = 'plugin::settings' FOR UPDATE`;
+
+        const advisory = async (granted: boolean) => {
+            for (let i = 0; i < 100; i++) {
+                const [{ count }] = await sql`SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND granted = ${granted}`;
+                if (count > 0) return;
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+            throw new Error('Advisory lock never reached');
+        };
+
+        const first = model.commit('user@example.com', { 'plugin::settings': { mixed: 'first' }, 'tak::remarks': 'First' });
+        await advisory(true);
+
+        const second = model.commit('user@example.com', { 'tak::remarks': 'Second', 'plugin::settings': { mixed: 'second' } });
+        await advisory(false);
+
+        await holder`ROLLBACK`;
+
+        const results = await Promise.allSettled([first, second]);
+        assert.deepEqual(results.map((result) => result.status === 'rejected' ? String(result.reason.cause ?? result.reason) : result.status), ['fulfilled', 'fulfilled']);
+
+        await model.commit('user@example.com', { 'plugin::settings': { mixed: '' } });
+    } catch (err) {
+        assert.ifError(err);
+    } finally {
+        holder.release();
+        await sql.end();
+        await pool.end();
+    }
+});
+
+test('PATCH: api/profile - a plugin_settings write leaves a new user on first run', async () => {
+    try {
+        const before = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: flight.token.firstrun },
+        }, true);
+
+        assert.equal(before.body.updated, before.body.created);
+
+        await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: flight.token.firstrun },
+            body: { plugin_settings: { 'crg-map-layers': 'crg-authkey' } },
+        }, true);
+
+        const after = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: flight.token.firstrun },
+        }, true);
+
+        assert.equal(after.body.updated, after.body.created);
+
+        const configured = await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: flight.token.firstrun },
+            body: { tak_callsign: 'Configured' },
+        }, true);
+
+        assert.notEqual(configured.body.updated, configured.body.created);
     } catch (err) {
         assert.ifError(err);
     }

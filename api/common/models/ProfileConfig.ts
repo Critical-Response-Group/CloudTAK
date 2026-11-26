@@ -30,10 +30,19 @@ export default class ProfileConfigModel {
         return config;
     }
 
-    async commit(username: string, config: Record<string, unknown>): Promise<Record<string, unknown>> {
+    /**
+     * Write settings in one transaction - a per-user advisory lock taken before any
+     * row lock serialises a user's writes so `plugin::settings` merges lose nothing
+     * and writes naming keys in any order cannot deadlock
+     */
+    async commit(username: string, config: Record<string, unknown>, opts: {
+        touch?: boolean;
+    } = {}): Promise<Record<string, unknown>> {
         const timestamp = new Date().toISOString();
 
         await this.pool.transaction(async (tx) => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`profile::settings:${username}`}::text))`);
+
             for (const key of Object.keys(config)) {
                 let raw = config[key];
                 if (raw === undefined) continue;
@@ -57,17 +66,17 @@ export default class ProfileConfigModel {
                     });
             }
 
-            await tx.update(Profile)
-                .set({ updated: timestamp })
-                .where(eq(Profile.username, username));
+            if (opts.touch) {
+                await tx.update(Profile)
+                    .set({ updated: timestamp })
+                    .where(eq(Profile.username, username));
+            }
         });
 
         return this.from(username);
     }
 
     async #mergePluginSettings(tx: Tx, username: string, incoming: Record<string, string>): Promise<Record<string, string>> {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`plugin::settings:${username}`}::text))`);
-
         const [current] = await tx.select({ value: ProfileSetting.value })
             .from(ProfileSetting)
             .where(and(eq(ProfileSetting.username, username), eq(ProfileSetting.key, 'plugin::settings')));
