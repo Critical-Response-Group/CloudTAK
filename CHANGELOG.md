@@ -24,8 +24,6 @@
 
 ### Pending Release
 
-- :tada: Plugins can keep per-user strings in the profile with `api.profile.setPluginSetting` - stored as `plugin_settings`, they survive logout and follow the user across devices
-
 ### v14.1.1 - 2026-11-24
 
 - :rocket: Allow plugins to style breadcrumb history points
