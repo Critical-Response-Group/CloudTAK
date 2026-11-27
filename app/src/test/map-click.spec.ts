@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import type { App } from 'vue';
 import type { Router } from 'vue-router';
 import type { MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
@@ -11,6 +11,9 @@ import { DrawToolMode } from '../stores/modules/draw.ts';
 import OverlayManager from '../base/overlay.ts';
 import HistoryLayer, { HISTORY_POINT_LAYER } from '../stores/modules/history.ts';
 import SearchBox from '../components/CloudTAK/util/SearchBox.vue';
+import FeatureHistory from '../base/feature-history.ts';
+import { FeatureHistorySource, type DBFeatureHistory } from '../database.ts';
+import router from '../router.ts';
 
 vi.mock('vue-router', async (original) => ({
     ...await original<typeof import('vue-router')>(),
@@ -20,6 +23,18 @@ vi.mock('vue-router', async (original) => ({
 const COT_LAYER = '-1-point';
 const PLUGIN_LAYER = 'crg-county-circles';
 const UNCLAIMED_LAYER = 'crg-county-names';
+
+const HISTORY_ROW: DBFeatureHistory = {
+    id: 'alpha@2026-11-27T00:00:00.000Z',
+    uid: 'alpha',
+    time: Date.parse('2026-11-27T00:00:00.000Z'),
+    callsign: 'ALPHA',
+    type: 'a-f-G',
+    path: '/',
+    source: FeatureHistorySource.Live,
+    properties: { id: 'alpha', callsign: 'ALPHA', type: 'a-f-G' } as DBFeatureHistory['properties'],
+    geometry: { type: 'Point', coordinates: [-96, 32] },
+};
 
 function feature(layer: string, id: string): MapGeoJSONFeature {
     return {
@@ -78,6 +93,24 @@ describe('map click ownership', () => {
         const done = mapStore.onMapClick(e);
         for (const listener of once.splice(0)) listener(e);
         await done;
+    }
+
+    async function historyLayer(mapStore: ReturnType<typeof useMapStore>) {
+        const source = { setData: vi.fn(), updateData: vi.fn(async () => undefined) };
+        Object.assign(mapStore._map as object, {
+            getSource: () => source,
+            getLayer: () => undefined,
+            addLayer: vi.fn(),
+            on: vi.fn(),
+            off: vi.fn(),
+            getLayersOrder: () => [],
+        });
+
+        const history = new HistoryLayer(mapStore);
+        history.init();
+        await vi.waitFor(() => expect(source.setData).toHaveBeenCalled());
+
+        return { history, source };
     }
 
     function routeEndpoint() {
@@ -252,23 +285,71 @@ describe('map click ownership', () => {
         expect(pluginClick).toHaveBeenCalledTimes(1);
     });
 
-    it('passes a click on a history point whose row is gone to the CloudTAK feature beneath', async () => {
+    it('opens a history point in the viewer, and passes the click beneath once its row is gone', async () => {
         const { mapStore } = setup();
-        vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        Object.assign(mapStore._map as object, {
-            getSource: () => undefined,
-            addSource: vi.fn(),
-            getLayer: () => undefined,
-            addLayer: vi.fn(),
-            on: vi.fn(),
-            getLayersOrder: () => [],
-        });
-        new HistoryLayer(mapStore).init();
-        rendered = [feature(HISTORY_POINT_LAYER, 'alpha@2026-11-27T00:00:00.000Z'), feature(COT_LAYER, 'alpha')];
+        const push = vi.spyOn(router, 'push').mockResolvedValue(undefined);
+        await FeatureHistory.put([HISTORY_ROW]);
+        const { history, source } = await historyLayer(mapStore);
+        rendered = [feature(HISTORY_POINT_LAYER, HISTORY_ROW.id), feature(COT_LAYER, 'alpha')];
+
+        await mapStore.onMapClick(click());
+        expect(push).toHaveBeenCalledWith('/menu/feature');
+        expect(mapStore.radial.mode).toBeUndefined();
+
+        // The row goes before the debounced source update removes the point
+        await FeatureHistory.clear('alpha');
+        history.refresh(['alpha']);
+        await vi.waitFor(() => expect(source.updateData).toHaveBeenCalled());
+        push.mockClear();
+
+        await mapStore.onMapClick(click());
+        expect(mapStore.radial.mode).toBe('cot');
+        expect(push).not.toHaveBeenCalled();
+        history.destroy();
+    });
+
+    it('keeps a newer claim on the history layer when history is torn down', async () => {
+        const { mapStore } = setup();
+        const { history } = await historyLayer(mapStore);
+        const newer = vi.fn();
+        plugin().click.add(HISTORY_POINT_LAYER, newer);
+        history.destroy();
+        rendered = [feature(HISTORY_POINT_LAYER, HISTORY_ROW.id)];
 
         await mapStore.onMapClick(click());
 
-        expect(mapStore.radial.mode).toBe('cot');
+        expect(newer).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs a plugin handler that throws, and keeps its claim', async () => {
+        const { mapStore } = setup();
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const thrown = new Error('county lookup failed');
+        pluginClick.mockImplementation(() => { throw thrown; });
+        rendered = [feature(PLUGIN_LAYER, 'rockwall')];
+
+        await mapStore.onMapClick(click());
+        await flushPromises();
+        expect(error).toHaveBeenCalledWith(expect.any(String), thrown);
+        expect(mapStore.radial.mode).toBeUndefined();
+
+        await mapStore.onMapClick(click());
+        expect(pluginClick).toHaveBeenCalledTimes(2);
+    });
+
+    it('logs a plugin handler that rejects, and keeps its claim', async () => {
+        const { mapStore } = setup();
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const thrown = new Error('county lookup failed');
+        pluginClick.mockImplementation(async () => { throw thrown; });
+        rendered = [feature(PLUGIN_LAYER, 'rockwall')];
+
+        await mapStore.onMapClick(click());
+        await flushPromises();
+        expect(error).toHaveBeenCalledWith(expect.any(String), thrown);
+
+        await mapStore.onMapClick(click());
+        expect(pluginClick).toHaveBeenCalledTimes(2);
     });
 
     it('lets a click that dismisses the multiple-feature picker do nothing else, and gives the next click to the plugin', async () => {
