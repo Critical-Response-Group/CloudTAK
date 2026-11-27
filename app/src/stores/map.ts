@@ -1501,78 +1501,7 @@ export const useMapStore = defineStore('cloudtak', {
                 }
             });
 
-            map.on('click', async (e: MapMouseEvent) => {
-                if (this.draw.mode !== DrawToolMode.STATIC) return;
-
-                if (this.radial.mode) {
-                    this.radial.mode = undefined;
-                    this.radial.cot = undefined;
-                    return;
-                }
-
-                if (this.select.feats) this.select.feats = [];
-
-                const clickMap = OverlayManager.clickableLayerMap();
-
-                // A single feature may exist in multiple layers (text, polygon,
-                // line) so dedupe the click results by ID
-                const dedupe: Map<string, MapGeoJSONFeature> = new Map();
-                map.queryRenderedFeatures(e.point)
-                    .filter((feat) => {
-                        return clickMap.has(feat.layer.id);
-                    })
-                    .forEach((feat) => {
-                        dedupe.set(String(feat.properties.id || feat.id), feat);
-                    })
-
-                const features = Array.from(dedupe.values());
-
-                if (!features.length) return;
-
-                if (e.originalEvent.ctrlKey && features.length) {
-                    const cot = await this.worker.db.get(features[0].properties.id, {
-                        mission: true
-                    });
-
-                    if (!cot) return;
-                    this.selected.set(cot.id, cot);
-                } else if (features.length === 1) {
-                    this.radialClick(features[0], {
-                        lngLat: e.lngLat.wrap(),
-                        point: e.point
-                    })
-                } else if (features.length > 1) {
-                    if (e.point.x < 150 || e.point.y < 150) {
-                        const flyTo: mapgl.FlyToOptions = {
-                            speed: Infinity,
-                            center: [e.lngLat.lng, e.lngLat.lat]
-                        };
-
-                        if (map.getZoom() < 3) flyTo.zoom = 4;
-                        map.flyTo(flyTo)
-
-                        this.select.x = this.container ? this.container.clientWidth / 2 : 0;
-                        this.select.y = this.container ? this.container.clientHeight / 2 : 0;
-                    } else {
-                        this.select.x = e.point.x;
-                        this.select.y = e.point.y;
-                    }
-
-                    const feats = (await Promise.all(features.map(async (feat) => {
-                        const featId = feat.properties.id || feat.id;
-                        if (!featId) return undefined;
-
-                        const cot = await this.worker.db.get(String(featId), {
-                            mission: true
-                        });
-
-                        return cot || feat;
-                    }))).filter((feat) => feat !== undefined);
-
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    this.select.feats = feats as any;
-                }
-            });
+            map.on('click', (e: MapMouseEvent) => this.onMapClick(e));
 
             map.on('contextmenu', (e) => {
                 if (this.draw.editing || this.draw.mode !== DrawToolMode.STATIC) return;
@@ -1888,6 +1817,84 @@ export const useMapStore = defineStore('cloudtak', {
             const attributionContainer = document.querySelector('.maplibregl-ctrl-attrib-inner');
             if (attributionContainer && attributions.length > 0) {
                 attributionContainer.innerHTML = attributions.join(' | ');
+            }
+        },
+
+        /**
+         * Route a click on the map to the CloudTAK action it triggers
+         */
+        onMapClick: async function(e: MapMouseEvent): Promise<void> {
+            const map = this.map;
+
+            if (this.draw.mode !== DrawToolMode.STATIC) return;
+
+            if (this.radial.mode) {
+                this.radial.mode = undefined;
+                this.radial.cot = undefined;
+                return;
+            }
+
+            if (this.select.feats) this.select.feats = [];
+
+            const clickMap = OverlayManager.clickableLayerMap();
+
+            // A single feature may exist in multiple layers (text, polygon,
+            // line) so dedupe the click results by ID
+            const dedupe: Map<string, MapGeoJSONFeature> = new Map();
+            map.queryRenderedFeatures(e.point)
+                .filter((feat) => {
+                    return clickMap.has(feat.layer.id);
+                })
+                .forEach((feat) => {
+                    dedupe.set(String(feat.properties.id || feat.id), feat);
+                })
+
+            const features = Array.from(dedupe.values());
+
+            if (!features.length) return;
+
+            if (e.originalEvent.ctrlKey && features.length) {
+                const cot = await this.worker.db.get(features[0].properties.id, {
+                    mission: true
+                });
+
+                if (!cot) return;
+                this.selected.set(cot.id, cot);
+            } else if (features.length === 1) {
+                this.radialClick(features[0], {
+                    lngLat: e.lngLat.wrap(),
+                    point: e.point
+                })
+            } else if (features.length > 1) {
+                if (e.point.x < 150 || e.point.y < 150) {
+                    const flyTo: mapgl.FlyToOptions = {
+                        speed: Infinity,
+                        center: [e.lngLat.lng, e.lngLat.lat]
+                    };
+
+                    if (map.getZoom() < 3) flyTo.zoom = 4;
+                    map.flyTo(flyTo)
+
+                    this.select.x = this.container ? this.container.clientWidth / 2 : 0;
+                    this.select.y = this.container ? this.container.clientHeight / 2 : 0;
+                } else {
+                    this.select.x = e.point.x;
+                    this.select.y = e.point.y;
+                }
+
+                const feats = (await Promise.all(features.map(async (feat) => {
+                    const featId = feat.properties.id || feat.id;
+                    if (!featId) return undefined;
+
+                    const cot = await this.worker.db.get(String(featId), {
+                        mission: true
+                    });
+
+                    return cot || feat;
+                }))).filter((feat) => feat !== undefined);
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.select.feats = feats as any;
             }
         },
 
