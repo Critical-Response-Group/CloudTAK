@@ -717,7 +717,7 @@ onBeforeUnmount(() => {
     bootComplete = true;
     removeAppLifecycleListeners?.();
     inviteChannel?.close();
-    if (locationClickHandler.value) mapStore._locationPicks.delete(locationClickHandler.value);
+    releaseLocationPick();
     void mapStore.destroy();
 });
 
@@ -761,15 +761,16 @@ async function toLocation() {
 }
 
 function setLocation() {
+    if (locationClickHandler.value) return;
+
     mapStore.manualLocationMode = true;
     mode.value = 'SetLocation';
     mapStore.map.getCanvas().style.cursor = 'crosshair';
 
     const handler = async (e: MapMouseEvent) => {
-        mapStore._locationPicks.delete(handler);
+        releaseLocationPick();
         mapStore.map.getCanvas().style.cursor = '';
         mode.value = 'Default';
-        locationClickHandler.value = null;
 
         await mapStore.worker.profile.update({
             tak_loc: {
@@ -786,16 +787,22 @@ function setLocation() {
     mapStore.map.once('click', handler);
 }
 
+// Remove the armed pick's click listener and its entry in the map store together
+function releaseLocationPick() {
+    const handler = locationClickHandler.value;
+    if (!handler) return;
+
+    locationClickHandler.value = null;
+    mapStore._locationPicks.delete(handler);
+    mapStore._map?.off('click', handler);
+}
+
 function cancelLocationSetting() {
     mapStore.manualLocationMode = false;
     mode.value = 'Default';
     mapStore.map.getCanvas().style.cursor = '';
 
-    if (locationClickHandler.value) {
-        mapStore._locationPicks.delete(locationClickHandler.value);
-        mapStore.map.off('click', locationClickHandler.value);
-        locationClickHandler.value = null;
-    }
+    releaseLocationPick();
 }
 
 async function exitManualMode() {
@@ -803,11 +810,7 @@ async function exitManualMode() {
     mode.value = 'Default';
     mapStore.map.getCanvas().style.cursor = '';
 
-    if (locationClickHandler.value) {
-        mapStore._locationPicks.delete(locationClickHandler.value);
-        mapStore.map.off('click', locationClickHandler.value);
-        locationClickHandler.value = null;
-    }
+    releaseLocationPick();
 
     mapStore.location = LocationState.Loading;
 
