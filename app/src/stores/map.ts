@@ -107,7 +107,7 @@ export type LayerClickHandler = (feature: MapGeoJSONFeature, event: MapMouseEven
 
 // A claim that returns false declines the click, which passes to the next
 // clickable feature beneath
-type LayerClaim = (feature: MapGeoJSONFeature, event: MapMouseEvent) => boolean | void;
+export type LayerClaim = (feature: MapGeoJSONFeature, event: MapMouseEvent) => boolean | void;
 
 export const useMapStore = defineStore('cloudtak', {
     state: (): {
@@ -1833,6 +1833,20 @@ export const useMapStore = defineStore('cloudtak', {
             if (attributionContainer && attributions.length > 0) {
                 attributionContainer.innerHTML = attributions.join(' | ');
             }
+        },
+
+        /**
+         * Claim the clicks on a map layer
+         * @returns A function that removes this claim, if it is still the layer's
+         */
+        claimLayerClicks: function(layer: string, claim: LayerClaim): () => void {
+            // Wrap the claim so that each registration is distinct, even for one function
+            const entry: LayerClaim = (feature, event) => claim(feature, event);
+            this._layerClicks.set(layer, entry);
+
+            return () => {
+                if (this._layerClicks.get(layer) === entry) this._layerClicks.delete(layer);
+            };
         },
 
         /**

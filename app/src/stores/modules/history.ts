@@ -226,6 +226,7 @@ export default class HistoryLayer {
     private busy: Promise<void> | null;
     private popup: mapgl.Popup | null;
     private initialized: boolean;
+    private releaseClick: (() => void) | null;
 
     constructor(mapStore: ReturnType<typeof useMapStore>) {
         this.mapStore = mapStore;
@@ -243,6 +244,7 @@ export default class HistoryLayer {
         this.busy = null;
         this.popup = null;
         this.initialized = false;
+        this.releaseClick = null;
 
         this.onHover = this.onHover.bind(this);
         this.onLeave = this.onLeave.bind(this);
@@ -299,7 +301,7 @@ export default class HistoryLayer {
 
         map.on('mousemove', HISTORY_POINT_LAYER, this.onHover);
         map.on('mouseleave', HISTORY_POINT_LAYER, this.onLeave);
-        this.mapStore._layerClicks.set(HISTORY_POINT_LAYER, this.onClick);
+        this.releaseClick = this.mapStore.claimLayerClicks(HISTORY_POINT_LAYER, this.onClick);
 
         this.initialized = true;
         this.restack();
@@ -433,7 +435,8 @@ export default class HistoryLayer {
 
         if (!this.initialized) return;
         this.initialized = false;
-        this.mapStore._layerClicks.delete(HISTORY_POINT_LAYER);
+        this.releaseClick?.();
+        this.releaseClick = null;
 
         const map = this.mapStore._map as mapgl.Map | undefined;
         if (!map) return;
