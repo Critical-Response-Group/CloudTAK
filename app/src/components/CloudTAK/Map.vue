@@ -761,10 +761,12 @@ async function toLocation() {
 
 function setLocation() {
     mapStore.manualLocationMode = true;
+    mapStore.pickingLocation = true;
     mode.value = 'SetLocation';
     mapStore.map.getCanvas().style.cursor = 'crosshair';
 
     locationClickHandler.value = async (e: MapMouseEvent) => {
+        mapStore.pickingLocation = false;
         mapStore.map.getCanvas().style.cursor = '';
         mode.value = 'Default';
         locationClickHandler.value = null;
@@ -784,6 +786,7 @@ function setLocation() {
 
 function cancelLocationSetting() {
     mapStore.manualLocationMode = false;
+    mapStore.pickingLocation = false;
     mode.value = 'Default';
     mapStore.map.getCanvas().style.cursor = '';
 
@@ -795,6 +798,7 @@ function cancelLocationSetting() {
 
 async function exitManualMode() {
     mapStore.manualLocationMode = false;
+    mapStore.pickingLocation = false;
     mode.value = 'Default';
     mapStore.map.getCanvas().style.cursor = '';
 

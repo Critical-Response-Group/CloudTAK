@@ -100,6 +100,11 @@ function waitForAtlasWorkerReady(worker: Worker): Promise<void> {
 
 export type TAKNotification = { type: string; name: string; body: string; url: string; created: string; }
 
+/**
+ * Handles a click on a feature of a layer that claimed its clicks
+ */
+export type LayerClickHandler = (feature: MapGeoJSONFeature, event: MapMouseEvent) => void;
+
 export const useMapStore = defineStore('cloudtak', {
     state: (): {
         _map?: mapgl.Map;
@@ -108,6 +113,8 @@ export const useMapStore = defineStore('cloudtak', {
         _menu?: unknown;
         _bottomBar?: unknown;
         _history?: unknown;
+        // Layers outside OverlayManager that claim their clicks, by layer ID
+        _layerClicks: Map<string, LayerClickHandler>;
 
         _removeOrientationListener?: () => Promise<void>;
         _cotResync?: Promise<void>;
@@ -150,6 +157,8 @@ export const useMapStore = defineStore('cloudtak', {
         coordFormat: string;
         defaultPointType: string;
         manualLocationMode: boolean;
+        // The next map click picks a location rather than a feature
+        pickingLocation: boolean;
 
         lastUpdateCOTErrorSignature: string | null;
 
@@ -210,6 +219,7 @@ export const useMapStore = defineStore('cloudtak', {
             _worker: undefined,
             _destroying: undefined,
             _bottomBar: markRaw(new BottomBarManager()),
+            _layerClicks: markRaw(new Map()),
             timer: null,
             backgrounded: false,
             callsign: 'Unknown',
@@ -240,6 +250,7 @@ export const useMapStore = defineStore('cloudtak', {
             defaultPointType: 'u-d-p',
             toastOffset: { x: 70, y: 60 },
             manualLocationMode: false,
+            pickingLocation: false,
 
             lastUpdateCOTErrorSignature: null,
             locked: [],
@@ -1825,6 +1836,27 @@ export const useMapStore = defineStore('cloudtak', {
          */
         onMapClick: async function(e: MapMouseEvent): Promise<void> {
             const map = this.map;
+            const clickMap = OverlayManager.clickableLayerMap();
+            const rendered = map.queryRenderedFeatures(e.point);
+
+            // A claimed layer owns the click only while CloudTAK is idle and its
+            // feature is the topmost one that CloudTAK or a claim acts on. Decide
+            // before anything awaits or changes state
+            const idle = this.draw.mode === DrawToolMode.STATIC
+                && !this.draw.editing
+                && !this.radial.mode
+                && !this.select.feats.length
+                && !this.pickingLocation;
+
+            if (idle) {
+                const top = rendered.find((feat) => clickMap.has(feat.layer.id) || this._layerClicks.has(feat.layer.id));
+                const claim = top && !clickMap.has(top.layer.id) ? this._layerClicks.get(top.layer.id) : undefined;
+
+                if (top && claim) {
+                    claim(top, e);
+                    return;
+                }
+            }
 
             if (this.draw.mode !== DrawToolMode.STATIC) return;
 
@@ -1836,12 +1868,10 @@ export const useMapStore = defineStore('cloudtak', {
 
             if (this.select.feats) this.select.feats = [];
 
-            const clickMap = OverlayManager.clickableLayerMap();
-
             // A single feature may exist in multiple layers (text, polygon,
             // line) so dedupe the click results by ID
             const dedupe: Map<string, MapGeoJSONFeature> = new Map();
-            map.queryRenderedFeatures(e.point)
+            rendered
                 .filter((feat) => {
                     return clickMap.has(feat.layer.id);
                 })

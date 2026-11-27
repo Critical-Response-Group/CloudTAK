@@ -1,10 +1,9 @@
 import * as mapgl from 'maplibre-gl';
-import type { MapLayerMouseEvent, GeoJSONSourceDiff } from 'maplibre-gl';
+import type { MapGeoJSONFeature, MapLayerMouseEvent, GeoJSONSourceDiff } from 'maplibre-gl';
 import type { FeatureCollection, Feature as GeoJSONFeature, Geometry as GeoJSONGeometry, Position } from 'geojson';
 import { db, type DBBreadcrumb, type DBFeatureHistory } from '../../database.ts';
 import FeatureHistory from '../../base/feature-history.ts';
 import COT from '../../base/cot.ts';
-import { DrawToolMode } from './draw.ts';
 import type { Feature } from '../../types.ts';
 import type { useMapStore } from '../map.ts';
 import type { HistoryChangeBody } from '../../utils/events.ts';
@@ -300,7 +299,7 @@ export default class HistoryLayer {
 
         map.on('mousemove', HISTORY_POINT_LAYER, this.onHover);
         map.on('mouseleave', HISTORY_POINT_LAYER, this.onLeave);
-        map.on('click', HISTORY_POINT_LAYER, this.onClick);
+        this.mapStore._layerClicks.set(HISTORY_POINT_LAYER, this.onClick);
 
         this.initialized = true;
         this.restack();
@@ -434,6 +433,7 @@ export default class HistoryLayer {
 
         if (!this.initialized) return;
         this.initialized = false;
+        this.mapStore._layerClicks.delete(HISTORY_POINT_LAYER);
 
         const map = this.mapStore._map as mapgl.Map | undefined;
         if (!map) return;
@@ -441,7 +441,6 @@ export default class HistoryLayer {
         try {
             map.off('mousemove', HISTORY_POINT_LAYER, this.onHover);
             map.off('mouseleave', HISTORY_POINT_LAYER, this.onLeave);
-            map.off('click', HISTORY_POINT_LAYER, this.onClick);
 
             if (map.getLayer(HISTORY_POINT_LAYER)) map.removeLayer(HISTORY_POINT_LAYER);
             if (map.getLayer(HISTORY_LINE_LAYER)) map.removeLayer(HISTORY_LINE_LAYER);
@@ -618,21 +617,10 @@ export default class HistoryLayer {
         if (this.popup) this.popup.remove();
     }
 
-    private onClick(event: MapLayerMouseEvent): void {
-        // Mirror the map click handler: never open a point mid-draw or over an open radial
-        if (this.mapStore.draw.mode !== DrawToolMode.STATIC) return;
-        if (this.mapStore.radial.mode) return;
-
-        const row = this.rowAt(event);
-        if (!row) return;
-
-        // A live marker under the cursor takes precedence - the map click handler opens it
-        const covered = this.mapStore.map.queryRenderedFeatures(event.point).some((feat) => {
-            return !feat.layer.id.startsWith('cloudtak-history') && feat.properties && feat.properties.id !== undefined;
-        });
-        if (covered) return;
-
-        this.select(row);
+    /** The map click handler calls this when a history point is the topmost clickable feature */
+    private onClick(feat: MapGeoJSONFeature): void {
+        const row = this.rows.get(String(feat.properties.id));
+        if (row) this.select(row);
     }
 }
 

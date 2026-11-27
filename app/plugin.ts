@@ -3,7 +3,7 @@ import type { Component } from 'vue';
 import { markRaw, toRaw, defineAsyncComponent } from 'vue';
 import type { Router, RouteRecordRaw } from 'vue-router';
 import type { Pinia } from 'pinia';
-import { useMapStore } from './src/stores/map.ts';
+import { useMapStore, type LayerClickHandler } from './src/stores/map.ts';
 import { useFloatStore } from './src/stores/float.ts';
 import type { MenuItemConfig } from './src/stores/modules/menu.ts';
 import type { BottomBarItemConfig } from './src/stores/modules/bottombar.ts';
@@ -20,6 +20,7 @@ import { std, stdurl } from './src/std.ts';
 const FloatingGeneric = defineAsyncComponent(() => import('./src/components/CloudTAK/util/FloatingGeneric.vue'));
 
 export type { MenuItemConfig };
+export type { LayerClickHandler };
 export type { BottomBarItemConfig };
 export type { DBFeature };
 export type { DBFeatureHistory };
@@ -188,6 +189,34 @@ export class PluginAPI {
     get map(): mapgl.Map {
         const mapStore = useMapStore(this.pinia);
         return mapStore.map;
+    }
+
+    /**
+     * Claim the clicks on map layers the plugin added
+     */
+    get click() {
+        const mapStore = useMapStore(this.pinia);
+        return {
+            /**
+             * Call the handler, and nothing else, for a click whose topmost
+             * clickable feature is on the layer, unless CloudTAK is drawing,
+             * editing, showing its radial menu or multiple-feature picker, or
+             * picking a location. Layers that CloudTAK or a plugin do not make
+             * clickable are passed over.
+             * @param layer The ID of the map layer
+             * @param handler Called with the clicked feature and the click event
+             */
+            add: (layer: string, handler: LayerClickHandler): void => {
+                mapStore._layerClicks.set(layer, handler);
+            },
+            /**
+             * Stop claiming the clicks on a layer
+             * @param layer The ID of the map layer
+             */
+            remove: (layer: string): void => {
+                mapStore._layerClicks.delete(layer);
+            }
+        };
     }
 
     /**
