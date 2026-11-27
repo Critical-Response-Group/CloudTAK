@@ -29,7 +29,7 @@ describe('setting the location by hand', () => {
     const pluginClick = vi.fn();
     const update = vi.fn(async () => undefined);
 
-    function mountMap() {
+    function mountMap(opts: { productionListener?: boolean } = {}) {
         const mapStore = useMapStore(pinia);
         const canvas = { style: { cursor: '' } };
 
@@ -39,7 +39,9 @@ describe('setting the location by hand', () => {
             queryRenderedFeatures: () => [{ id: 'rockwall', layer: { id: PLUGIN_LAYER }, properties: { id: 'rockwall' } } as unknown as MapGeoJSONFeature],
             getCanvas: () => canvas,
         });
-        map.on('click', (e: mapgl.Event) => { clicks.push(mapStore.onMapClick(e as unknown as MapMouseEvent)); });
+        if (!opts.productionListener) {
+            map.on('click', (e: mapgl.Event) => { clicks.push(mapStore.onMapClick(e as unknown as MapMouseEvent)); });
+        }
         mapStore._map = map as never;
         mapStore._draw = { mode: DrawToolMode.STATIC, editing: null } as never;
         mapStore._menu = {} as never;
@@ -150,6 +152,24 @@ describe('setting the location by hand', () => {
 
     it('saves the clicked location and gives the next click to the plugin', async () => {
         const { wrapper } = mountMap();
+        await flushPromises();
+        wrapper.findComponent(GPSPanel).vm.$emit('set-location');
+        await flushPromises();
+
+        await mapClick();
+        expect(update).toHaveBeenCalledWith({ tak_loc: { type: 'Point', coordinates: [-96, 32] } });
+        expect(pluginClick).not.toHaveBeenCalled();
+
+        await mapClick();
+        expect(pluginClick).toHaveBeenCalledTimes(1);
+        wrapper.unmount();
+    });
+
+    it('routes clicks through the listener that initOverlays registers', async () => {
+        const { mapStore, wrapper } = mountMap({ productionListener: true });
+        vi.spyOn(OverlayManager, 'list').mockRejectedValue(new Error('stop after the map listeners'));
+        await expect(mapStore.initOverlays()).rejects.toThrow('stop after the map listeners');
+
         await flushPromises();
         wrapper.findComponent(GPSPanel).vm.$emit('set-location');
         await flushPromises();

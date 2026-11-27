@@ -103,6 +103,7 @@ describe('map click ownership', () => {
             addLayer: vi.fn(),
             on: vi.fn(),
             off: vi.fn(),
+            removeSource: vi.fn(),
             getLayersOrder: () => [],
         });
 
