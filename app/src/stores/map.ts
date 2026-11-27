@@ -105,6 +105,10 @@ export type TAKNotification = { type: string; name: string; body: string; url: s
  */
 export type LayerClickHandler = (feature: MapGeoJSONFeature, event: MapMouseEvent) => void;
 
+// A claim that returns false declines the click, which passes to the next
+// clickable feature beneath
+type LayerClaim = (feature: MapGeoJSONFeature, event: MapMouseEvent) => boolean | void;
+
 export const useMapStore = defineStore('cloudtak', {
     state: (): {
         _map?: mapgl.Map;
@@ -114,7 +118,9 @@ export const useMapStore = defineStore('cloudtak', {
         _bottomBar?: unknown;
         _history?: unknown;
         // Layers outside OverlayManager that claim their clicks, by layer ID
-        _layerClicks: Map<string, LayerClickHandler>;
+        _layerClicks: Map<string, LayerClaim>;
+        // Pending location picks, keyed by the click listener that completes each
+        _locationPicks: Set<object>;
 
         _removeOrientationListener?: () => Promise<void>;
         _cotResync?: Promise<void>;
@@ -157,8 +163,6 @@ export const useMapStore = defineStore('cloudtak', {
         coordFormat: string;
         defaultPointType: string;
         manualLocationMode: boolean;
-        // The next map click picks a location rather than a feature
-        pickingLocation: boolean;
 
         lastUpdateCOTErrorSignature: string | null;
 
@@ -220,6 +224,7 @@ export const useMapStore = defineStore('cloudtak', {
             _destroying: undefined,
             _bottomBar: markRaw(new BottomBarManager()),
             _layerClicks: markRaw(new Map()),
+            _locationPicks: markRaw(new Set()),
             timer: null,
             backgrounded: false,
             callsign: 'Unknown',
@@ -250,7 +255,6 @@ export const useMapStore = defineStore('cloudtak', {
             defaultPointType: 'u-d-p',
             toastOffset: { x: 70, y: 60 },
             manualLocationMode: false,
-            pickingLocation: false,
 
             lastUpdateCOTErrorSignature: null,
             locked: [],
@@ -1836,27 +1840,6 @@ export const useMapStore = defineStore('cloudtak', {
          */
         onMapClick: async function(e: MapMouseEvent): Promise<void> {
             const map = this.map;
-            const clickMap = OverlayManager.clickableLayerMap();
-            const rendered = map.queryRenderedFeatures(e.point);
-
-            // A claimed layer owns the click only while CloudTAK is idle and its
-            // feature is the topmost one that CloudTAK or a claim acts on. Decide
-            // before anything awaits or changes state
-            const idle = this.draw.mode === DrawToolMode.STATIC
-                && !this.draw.editing
-                && !this.radial.mode
-                && !this.select.feats.length
-                && !this.pickingLocation;
-
-            if (idle) {
-                const top = rendered.find((feat) => clickMap.has(feat.layer.id) || this._layerClicks.has(feat.layer.id));
-                const claim = top && !clickMap.has(top.layer.id) ? this._layerClicks.get(top.layer.id) : undefined;
-
-                if (top && claim) {
-                    claim(top, e);
-                    return;
-                }
-            }
 
             if (this.draw.mode !== DrawToolMode.STATIC) return;
 
@@ -1864,6 +1847,21 @@ export const useMapStore = defineStore('cloudtak', {
                 this.radial.mode = undefined;
                 this.radial.cot = undefined;
                 return;
+            }
+
+            const clickMap = OverlayManager.clickableLayerMap();
+            const rendered = map.queryRenderedFeatures(e.point);
+
+            // While CloudTAK is idle, a claimed layer owns the click when its
+            // feature is the topmost one that CloudTAK or a claim acts on. Decide
+            // before anything awaits or changes state
+            if (!this.draw.editing && !this.select.feats.length && !this._locationPicks.size) {
+                for (const feat of rendered) {
+                    if (clickMap.has(feat.layer.id)) break;
+
+                    const claim = this._layerClicks.get(feat.layer.id);
+                    if (claim && claim(feat, e) !== false) return;
+                }
             }
 
             if (this.select.feats) this.select.feats = [];

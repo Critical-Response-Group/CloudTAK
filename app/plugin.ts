@@ -202,19 +202,22 @@ export class PluginAPI {
              * clickable feature is on the layer, unless CloudTAK is drawing,
              * editing, showing its radial menu or multiple-feature picker, or
              * picking a location. Layers that CloudTAK or a plugin do not make
-             * clickable are passed over.
+             * clickable are passed over. A layer that CloudTAK's OverlayManager
+             * also makes clickable stays CloudTAK's, and adding a layer again
+             * replaces its handler.
              * @param layer The ID of the map layer
              * @param handler Called with the clicked feature and the click event
+             * @returns A function that removes this handler, if it is still the layer's
              */
-            add: (layer: string, handler: LayerClickHandler): void => {
-                mapStore._layerClicks.set(layer, handler);
-            },
-            /**
-             * Stop claiming the clicks on a layer
-             * @param layer The ID of the map layer
-             */
-            remove: (layer: string): void => {
-                mapStore._layerClicks.delete(layer);
+            add: (layer: string, handler: LayerClickHandler): (() => void) => {
+                const claim: LayerClickHandler = (feature, event) => {
+                    handler(feature, event);
+                };
+                mapStore._layerClicks.set(layer, claim);
+
+                return () => {
+                    if (mapStore._layerClicks.get(layer) === claim) mapStore._layerClicks.delete(layer);
+                };
             }
         };
     }

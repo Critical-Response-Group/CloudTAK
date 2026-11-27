@@ -617,10 +617,16 @@ export default class HistoryLayer {
         if (this.popup) this.popup.remove();
     }
 
-    /** The map click handler calls this when a history point is the topmost clickable feature */
-    private onClick(feat: MapGeoJSONFeature): void {
+    /**
+     * The map click handler calls this when a history point is the topmost
+     * clickable feature. A point whose row is gone but still drawn declines
+     */
+    private onClick(feat: MapGeoJSONFeature): boolean {
         const row = this.rows.get(String(feat.properties.id));
-        if (row) this.select(row);
+        if (!row) return false;
+
+        this.select(row);
+        return true;
     }
 }
 

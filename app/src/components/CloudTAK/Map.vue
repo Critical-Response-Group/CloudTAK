@@ -717,6 +717,7 @@ onBeforeUnmount(() => {
     bootComplete = true;
     removeAppLifecycleListeners?.();
     inviteChannel?.close();
+    if (locationClickHandler.value) mapStore._locationPicks.delete(locationClickHandler.value);
     void mapStore.destroy();
 });
 
@@ -761,12 +762,11 @@ async function toLocation() {
 
 function setLocation() {
     mapStore.manualLocationMode = true;
-    mapStore.pickingLocation = true;
     mode.value = 'SetLocation';
     mapStore.map.getCanvas().style.cursor = 'crosshair';
 
-    locationClickHandler.value = async (e: MapMouseEvent) => {
-        mapStore.pickingLocation = false;
+    const handler = async (e: MapMouseEvent) => {
+        mapStore._locationPicks.delete(handler);
         mapStore.map.getCanvas().style.cursor = '';
         mode.value = 'Default';
         locationClickHandler.value = null;
@@ -781,16 +781,18 @@ function setLocation() {
         await mapStore.refresh();
     };
 
-    mapStore.map.once('click', locationClickHandler.value);
+    locationClickHandler.value = handler;
+    mapStore._locationPicks.add(handler);
+    mapStore.map.once('click', handler);
 }
 
 function cancelLocationSetting() {
     mapStore.manualLocationMode = false;
-    mapStore.pickingLocation = false;
     mode.value = 'Default';
     mapStore.map.getCanvas().style.cursor = '';
 
     if (locationClickHandler.value) {
+        mapStore._locationPicks.delete(locationClickHandler.value);
         mapStore.map.off('click', locationClickHandler.value);
         locationClickHandler.value = null;
     }
@@ -798,11 +800,11 @@ function cancelLocationSetting() {
 
 async function exitManualMode() {
     mapStore.manualLocationMode = false;
-    mapStore.pickingLocation = false;
     mode.value = 'Default';
     mapStore.map.getCanvas().style.cursor = '';
 
     if (locationClickHandler.value) {
+        mapStore._locationPicks.delete(locationClickHandler.value);
         mapStore.map.off('click', locationClickHandler.value);
         locationClickHandler.value = null;
     }

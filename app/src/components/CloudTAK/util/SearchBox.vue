@@ -415,7 +415,7 @@ function onFocus(): void {
 
 function startPickingLocation(): void {
     pickingLocation.value = true;
-    mapStore.pickingLocation = true;
+    mapStore._locationPicks.add(onMapClick);
     dismissed.value = true;
     mapStore.map.getCanvas().style.cursor = 'crosshair';
 
@@ -424,14 +424,14 @@ function startPickingLocation(): void {
 
 function cancelPickingLocation(): void {
     pickingLocation.value = false;
-    mapStore.pickingLocation = false;
+    mapStore._locationPicks.delete(onMapClick);
     mapStore.map.getCanvas().style.cursor = '';
     mapStore.map.off('click', onMapClick);
 }
 
 function onMapClick(e: { lngLat: { lng: number, lat: number } }): void {
     pickingLocation.value = false;
-    mapStore.pickingLocation = false;
+    mapStore._locationPicks.delete(onMapClick);
     mapStore.map.getCanvas().style.cursor = '';
 
     const { lng, lat } = e.lngLat;
@@ -442,7 +442,7 @@ onUnmounted(() => {
     if (timer) clearTimeout(timer);
 
     if (pickingLocation.value) {
-        mapStore.pickingLocation = false;
+        mapStore._locationPicks.delete(onMapClick);
         mapStore.map.getCanvas().style.cursor = '';
         mapStore.map.off('click', onMapClick);
     }
