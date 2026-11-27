@@ -15,6 +15,7 @@ flight.takeoff();
 flight.user();
 flight.user({ username: 'user', admin: false });
 flight.user({ username: 'firstrun', admin: false });
+flight.user({ username: 'emptypatch', admin: false });
 flight.server('admin@example.com', 'password123');
 
 let session: string;
@@ -181,6 +182,71 @@ test('ProfileConfig.commit - touches Profile.updated with the database clock, no
 
     const profile = await flight.config!.models.Profile.from('user@example.com');
     assert.ok(new Date(profile.updated).getUTCFullYear() > 2000, `updated was ${profile.updated}`);
+});
+
+test('ProfileConfig.commit - a save held at the lock never moves Profile.updated backward', async () => {
+    const connstr = new URL(flight.connstr!);
+    connstr.searchParams.delete('max');
+    const pool = await Pool.connect(connstr.toString(), pgtypes);
+    const model = new ProfileConfigModel(pool);
+    const sql = postgres(flight.connstr!, { max: 2, onnotice: () => {} });
+    const holder = await sql.reserve();
+
+    try {
+        await holder`BEGIN`;
+        await holder`SELECT pg_advisory_xact_lock(hashtext(${'profile::settings:user@example.com'}::text))`;
+
+        const save = model.commit('user@example.com', { 'tak::remarks': 'Held at the lock' }, { touch: true });
+
+        for (let i = 0; ; i++) {
+            const [{ count }] = await sql`
+                SELECT count(*)::int AS count
+                    FROM pg_locks
+                    WHERE locktype = 'advisory'
+                        AND granted = false
+                        AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+            `;
+            if (count > 0) break;
+            if (i === 100) throw new Error('Save never waited at the lock');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+
+        const [{ updated: concurrent }] = await sql`
+            UPDATE profile SET updated = statement_timestamp() WHERE username = 'user@example.com' RETURNING updated
+        `;
+
+        await holder`ROLLBACK`;
+        await save;
+
+        const [{ updated: final }] = await sql`SELECT updated FROM profile WHERE username = 'user@example.com'`;
+        assert.ok(final >= concurrent, `updated moved from ${concurrent.toISOString()} back to ${final.toISOString()}`);
+    } finally {
+        await holder`ROLLBACK`;
+        holder.release();
+        await sql.end();
+        pool.end();
+    }
+});
+
+test('PATCH: api/profile - an empty PATCH still advances updated, as at c2510e9', async () => {
+    try {
+        const before = await flight.fetch('/api/profile', {
+            method: 'GET',
+            auth: { bearer: flight.token.emptypatch },
+        }, true);
+
+        assert.equal(before.body.updated, before.body.created);
+
+        const res = await flight.fetch('/api/profile', {
+            method: 'PATCH',
+            auth: { bearer: flight.token.emptypatch },
+            body: {},
+        }, true);
+
+        assert.notEqual(res.body.updated, res.body.created);
+    } catch (err) {
+        assert.ifError(err);
+    }
 });
 
 test('PATCH: api/profile - a plugin_settings write leaves a new user on first run', async () => {

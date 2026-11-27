@@ -63,7 +63,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             }
 
             await config.models.ProfileConfig.commit(user.email, profile_config, {
-                touch: Object.keys(profile_config).some((key) => key !== 'plugin::settings'),
+                touch: Object.keys(profile_config).join() !== 'plugin::settings',
             });
 
             const profile = await profileControl.from(user.email);
