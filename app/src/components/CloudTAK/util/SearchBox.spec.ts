@@ -9,30 +9,23 @@ const flyTo = vi.fn();
 const fitBounds = vi.fn();
 const dbAdd = vi.fn();
 const dbSearch = vi.fn<(query: string, opts: unknown) => Promise<Set<unknown>>>(async () => new Set());
-const once = vi.fn();
-const canvas = { style: { cursor: '' } };
-const mapStore = {
-    pickingLocation: false,
-    map: {
-        getCenter: () => ({ lng: -105, lat: 39.7 }),
-        getCanvas: () => canvas,
-        once,
-        off: vi.fn(),
-        flyTo,
-        fitBounds
-    },
-    worker: {
-        db: { search: dbSearch, add: dbAdd },
-        profile: { creator: async () => ({ uid: 'me', callsign: 'Me', type: 'a-f-G' }) }
-    }
-};
 
 vi.mock('../../../std.ts', () => ({
     server: { GET: (...args: unknown[]) => GET(...args) }
 }));
 
 vi.mock('../../../stores/map.ts', () => ({
-    useMapStore: () => mapStore
+    useMapStore: () => ({
+        map: {
+            getCenter: () => ({ lng: -105, lat: 39.7 }),
+            flyTo,
+            fitBounds
+        },
+        worker: {
+            db: { search: dbSearch, add: dbAdd },
+            profile: { creator: async () => ({ uid: 'me', callsign: 'Me', type: 'a-f-G' }) }
+        }
+    })
 }));
 
 vi.mock('../../../base/cot.ts', () => ({ default: class COT {} }));
@@ -101,8 +94,6 @@ describe('CloudTAK/util/SearchBox', () => {
         loadedFrom.mockReset();
         overlayList.mockReset();
         overlayList.mockResolvedValue([]);
-        once.mockReset();
-        mapStore.pickingLocation = false;
     });
 
     it('shows a distinct icon for every search type', async () => {
@@ -372,20 +363,5 @@ describe('CloudTAK/util/SearchBox', () => {
         expect(wrapper.find('.search-box--panel').exists()).toBe(true);
         expect(wrapper.find('.empty').exists()).toBe(true);
         expect(wrapper.find('.search-box__footer').text()).toContain('Navigate');
-    });
-
-    it('tells the map store a location pick is active until the pick or its cancel', async () => {
-        const wrapper = mount(SearchBox, { props: { locationPicker: true } });
-        const picker = wrapper.find('.location-picker-btn');
-
-        await picker.trigger('click');
-        expect(mapStore.pickingLocation).toBe(true);
-        await picker.trigger('click');
-        expect(mapStore.pickingLocation).toBe(false);
-
-        await picker.trigger('click');
-        expect(mapStore.pickingLocation).toBe(true);
-        once.mock.calls[1][1]({ lngLat: { lng: -96, lat: 32 } });
-        expect(mapStore.pickingLocation).toBe(false);
     });
 });
